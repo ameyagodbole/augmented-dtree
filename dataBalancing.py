@@ -101,7 +101,7 @@ class DataBalance(object):
 		return df
 
 
-	def dataBalance(self):
+	def data_balance(self, out_file_name):
 		"""
 		Balances the data and saves it in a csv file.
 		Arguments:
@@ -112,10 +112,13 @@ class DataBalance(object):
 		self.cluster()
 		dfBalanced = self.balance()
 		out_csv = dfBalanced[['features','label']]
-		out_csv.to_csv('b_' + self.input_file)
+		out_csv.to_csv(out_file_name)
 
 
 	def load(self):
+		"""
+		Loads data from csv file to a dataframe
+		"""
 		df = pd.read_csv(self.input_file, names=['features', 'label'])
 		df['cluster'] = np.nan	
 		df['original'] = 1

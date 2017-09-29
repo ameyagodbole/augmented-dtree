@@ -33,14 +33,14 @@ class Perceptron(Classifier):
 		self.graph = tf.Graph()
 		with self.graph.as_default():
 			with tf.variable_scope('input') as scope:
-				data = tf.placeholder(tf.float32, [None, input_dim], name="Xin")
+				data = tf.placeholder(tf.float32, [None, self.input_dim], name="Xin")
 				# one hot encoded sample vs target class
-				label = tf.placeholder(tf.float32, [None, num_classes], name="Y")
+				label = tf.placeholder(tf.float32, [None, self.num_classes], name="Y")
 				global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name='global_step')
 			with tf.variable_scope('perceptron') as scope:
-				W = tf.get_variable('weight', shape=[input_dim, output_dim], dtype=tf.float32,
+				W = tf.get_variable('weight', shape=[self.input_dim, self.output_dim], dtype=tf.float32,
 					initializer=tf.contrib.layers.xavier_initializer())
-				b = tf.get_variable('bias', shape=[1, output_dim], dtype=tf.float32,
+				b = tf.get_variable('bias', shape=[1, self.output_dim], dtype=tf.float32,
 					initializer=tf.contrib.layers.xavier_initializer())
 				# q.shape = [None, output_dim]
 				q = tf.nn.softmax(tf.matmul(data, W, name='matmul') + b, name='softmax')
@@ -61,9 +61,13 @@ class Perceptron(Classifier):
 
 		self.built = True
 
-	def train(self, data_file, child_id):
+	def train(self, data_file, balanced_file, child_id):
 		"""
 		Train on data and return params
+		Arguments:
+		data_file:	File containing the original data
+		balanced_file:	File containing the balanced data
+		child_id:	List of child nodes (used for saving split data)
 		"""
 		assert self.built, "Perceptron: train called before build"
 		params = {}
@@ -73,7 +77,7 @@ class Perceptron(Classifier):
 			for e in range(self.epochs):
 				epoch_loss = 0.0
 				num_samples = 0
-				for batch in self.batch_generator(data_file):
+				for batch in self.batch_generator(balanced_file):
 					_, bloss = sess.run([train_op, loss], feed_dict={data: batch[0], label:batch[1]})
 					epoch_loss += bloss*batch[0].shape[0]
 					num_samples += batch[0].shape[0]
@@ -92,6 +96,11 @@ class Perceptron(Classifier):
 		return params
 
 	def batch_generator(self, data_file):
+		"""
+		Generates batches for train operation
+		Arguments:
+		data_file:	File containing the data in csv format
+		"""
 		file = pd.read_csv(data_file)
 		indices = np.arange(len(file))
 		np.random.shuffle(indices)
@@ -100,11 +109,19 @@ class Perceptron(Classifier):
 			ulim = min((i+1)*self.batch_size, len(file))
 			batch[0] = file.loc[indices[i*self.batch_size:ulim]].as_matrix()[:,:-1]
 			labels = file.loc[indices[i*self.batch_size:ulim]].as_matrix()[:,-1].astype(np.int32)
+			# np.concatenate(...) ensures number of columns == num_classes
 			one_hot = pd.get_dummies(np.concatenate((labels,np.arange(self.num_classes))))
 			batch[1] = one_hot.as_matrix()[:-self.num_classes].astype(np.float32)
 			yield batch
 
 	def split_dataset(self, data_file, preds, child_id):
+		"""
+		Split dataset for child nodes
+		Arguments:
+		data_file:	File containing the data in csv format. NOTE: pass original data only
+		preds:		Decision maker predictions for each sample
+		child_id:	List of child nodes (used in filename of split data)
+		"""
 		file = pd.read_csv(data_file)
 		base = os.path.split(data_file)
 		pred_class = np.argmax(preds, axis=1)

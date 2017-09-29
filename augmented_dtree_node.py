@@ -8,7 +8,17 @@ class DTNode(object):
 	DTNode class to define DTree decisions
 	"""
 	
-	def __init__(self, node_id, parent_id, node_depth, num_classes, num_child, data_file):
+	def __init__(self, node_id, parent_id, node_depth, num_classes, num_child, data_file, balanced_file):
+		"""
+		Arguments:
+		node_id:	Index of node in tree nodelist
+		parent_id:	Index of parent node in tree nodelist
+		node_depth: Depth of node in decision tree
+		num_classes:	Number of classes in data
+		num_child:	Number of child nodes of node
+		data_file:	Original data
+		balanced_file:	Balanced data
+		"""
 		super(DTNode, self).__init__()
 		self.node_id = node_id
 		self.parent_id = parent_id
@@ -18,7 +28,7 @@ class DTNode(object):
 		self.num_classes = num_classes
 		self.num_child = num_child
 		self.data_file = data_file
-		
+		self.balanced_file = balanced_file
 		self.decision_maker = None
 
 		self.params = {}
@@ -51,7 +61,7 @@ class DTNode(object):
 			self.child_id = [-1]
 			return child_id
 		self.decision_maker.build()
-		self.params = self.decision_maker.train(self.data_file, self.child_id)
+		self.params = self.decision_maker.train(self.data_file, self.balanced_file, self.child_id)
 		return child_id
 
 	def save_node_params(self, savepath):

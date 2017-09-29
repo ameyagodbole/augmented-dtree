@@ -6,7 +6,7 @@ from classifiers.perceptron import Perceptron
 class DTree(object):
 	"""DTree class to store tree structure"""
 	
-	def __init__(self, num_classes, num_child, max_depth, data_type, data_dimension):
+	def __init__(self, num_classes, num_child, max_depth, data_type, data_dimension, data_balance):
 		"""
 		Arguments:
 		num_classes: Number of classes in data
@@ -14,6 +14,7 @@ class DTree(object):
 		max_depth:	Maximum depth of decision tree
 		data_type:	One of {'numeric','image'}
 		data_dimension:	Number of features in data; int for numeric , tuple of ints for image
+		data_balance: Bool (whether to use data_balancing)
 		"""
 		super(DTree, self).__init__()
 		self.num_classes = num_classes
@@ -21,6 +22,7 @@ class DTree(object):
 		self.max_depth = max_depth
 		self.data_type = data_type
 		self.data_dimension = data_dimension
+		self.data_balance = data_balance
 		if self.data_type == 'numeric' and self.num_classes>2:
 			self.decision_type = Perceptron
 		else:
@@ -51,6 +53,10 @@ class DTree(object):
 			curr_node.set_decision_maker(self.decision_type(input_dim=self.data_dimension, output_dim=self.num_child,
 				 num_classes=self.num_classes, epochs=epochs_per_node, batch_size=batch_size))
 			curr_node.set_child_id_start(len(self.nodes))
+			if self.data_balance:
+				# FIX
+				# databalance(input=os.path.join(base,'data_{}.csv'.format(i)), output=os.path.join(base,'b_data_{}.csv'.format(i)))
+				pass
 			child_list = curr_node.train()
 			curr_node.save_node_params(model_save_path)
 
@@ -60,9 +66,13 @@ class DTree(object):
 			for i in child_list:
 				# stop tree growth at max_depth
 				num_child = self.num_child if self.max_depth>1+curr_node.node_depth else 0
+				# if not using data balancing, send original file as balanced file
+				balance_filename = 'b_data_{}.csv'.format(i) if self.data_balance else 'data_{}.csv'.format(i) 
+				
 				new_node = DTNode(node_id=i, parent_id=curr_node.node_id, node_depth=1+curr_node.node_depth,
 				 num_classes=self.num_classes, num_child=num_child,
-				  data_file=os.path.join(base,'data_{}.csv'.format(i)) )
+				  data_file=os.path.join(base,'data_{}.csv'.format(i)), balanced_file=os.path.join(base,balance_filename) )
+				
 				self.nodes.append(new_node)
 			
 			node_to_process += 1

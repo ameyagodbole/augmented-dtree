@@ -6,7 +6,7 @@ from csv import reader
 from classifiers.classifier import Classifier
 
 class C45(Classifier):
-	"""Implement a single layer Perceptron"""
+	"""Implement a C4.5 classifier"""
 
 	def __init__(self, input_dim, output_dim, num_classes, epochs, batch_size):
 		"""
@@ -15,7 +15,7 @@ class C45(Classifier):
 		output_dim:	Dimension of output labels (equal to number of child nodes)
 		num_classes: Number of classes in data		
 		"""
-		super(Perceptron, self).__init__()
+		super(C45, self).__init__()
 		self.input_dim = input_dim
 		self.output_dim = 2
 		self.num_classes = num_classes
@@ -23,6 +23,7 @@ class C45(Classifier):
 		self.groups = null
 		self.index = null
 		self.split_val = null
+		self.score = null
 		
 
 	def build(self):
@@ -32,6 +33,10 @@ class C45(Classifier):
 		load_csv(balanced_file)
 		get_split()
 		split_dataset(data_file, child_id)
+		params = {}
+		params['index'] = self.index
+		params['value'] = self.split_val
+		return params
 
 	def load_csv(filename):
 		file = open(filename, "rb")
@@ -87,6 +92,8 @@ class C45(Classifier):
 		self.value = b_value
 		self.index = b_index
 		self.groups = b_groups
+		self.score = b_score
+
 
 	def split_dataset(self, data_file, child_id):
 		"""
@@ -96,7 +103,6 @@ class C45(Classifier):
 		preds:		Decision maker predictions for each sample
 		child_id:	List of child nodes (used in filename of split data)
 		"""
-		file = pd.read_csv(data_file)
 		base = os.path.split(data_file)
 		
 		for j in range(self.output_dim):
@@ -104,4 +110,28 @@ class C45(Classifier):
 
 				writer = csv.writer(f)
 				writer.writerows(self.groups[j])
+
+	def is_label(self):
+		"""Checks if the data should be split or declared a leaf node"""
+		pass
+	def max_freq(self):
+		pass
+
+
+
+	def predict(params, data):
+		"""
+		Split dataset for child nodes
+		Arguments:
+		data_file:	File containing the data in csv format. NOTE: pass original data only
+		preds:		Decision maker predictions for each sample
+		"""
+		base = os.path.split(data_file)
+		f = open(param_file, "r")
+		index = int(f.readline())
+		value = int(f.readline())
+		if data[index] < value:
+			return(0)
+		else:
+			return(1)
 			

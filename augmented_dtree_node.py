@@ -27,6 +27,7 @@ class DTNode(object):
 		self.label = None
 		self.num_classes = num_classes
 		self.num_child = num_child
+		self.child_id = []
 		self.data_file = data_file
 		self.balanced_file = balanced_file
 		self.decision_maker = None
@@ -68,25 +69,32 @@ class DTNode(object):
 		"""
 		Save node params to file
 		"""
-		with open(os.path.join(savepath, 'node_{}.pkl'.format()), 'wb') as savefile:
+		with open(os.path.join(savepath, 'node_{}.pkl'.format(self.node_id)), 'wb') as savefile:
 			pickle.dump(self.params, savefile, protocol=pickle.HIGHEST_PROTOCOL)
 
 	"""Load node paramaters from file"""
-	def load_node_params(self):
-		# TODO
-		pass
+	def load_node_params(self, path):
+		"""
+		Load node params to file
+		"""
+		with open(os.path.join(path, 'node_{}.pkl'.format(self.node_id)), 'rb') as f:
+    		self.params = pickle.load(f)
 
 	"""Predict on file. If not a label node, returns relevant child node"""
-	def predict(self):
-		# TODO
-		pass
+	def predict(self, datafile):
+		"""
+		Returns which child data should go to
+		"""
+		for line in open(datafile):
+    		data = line.split()
+    		return self.child_id[self.decision_maker.predict(self.params, data)]
+		
 
 	"""Check if current node is label node"""
 	def is_label_node(self):
-		# TODO
-		pass
+		return self.decision_maker.islabel() 
+
 
 	"""Set label for decision node"""
 	def get_label(self):
-		# TODO
-		pass
+		return self.decision_maker.max_freq()

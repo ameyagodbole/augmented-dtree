@@ -81,18 +81,17 @@ class DTNode(object):
     		self.params = pickle.load(f)
 
 	"""Predict on file. If not a label node, returns relevant child node"""
-	def predict(self, datafile):
+	def predict(self, data):
 		"""
 		Returns which child data should go to
 		"""
-		for line in open(datafile):
-    		data = line.split()
-    		return self.child_id[self.decision_maker.predict(self.params, data)]
+    	return self.child_id[self.decision_maker.predict(self.params, data)]
 		
 
 	"""Check if current node is label node"""
 	def is_label_node(self):
-		return self.decision_maker.islabel() 
+		
+		return self.decision_maker.is_label() 
 
 
 	"""Set label for decision node"""

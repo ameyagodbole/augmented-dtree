@@ -8,12 +8,14 @@ from classifiers.classifier import Classifier
 class C45(Classifier):
 	"""Implement a C4.5 classifier"""
 
-	def __init__(self, input_dim, output_dim, num_classes, epochs, batch_size):
+	def __init__(self, input_dim, output_dim, num_classes, epochs, batch_size, t1, t2):
 		"""
 		Arguments:
 		input_dim:	Dimension of input data
 		output_dim:	Dimension of output labels (equal to number of child nodes)
 		num_classes: Number of classes in data		
+		t1:		Threshold for impurity score
+		t2:		Threshold for size
 		"""
 		super(C45, self).__init__()
 		self.input_dim = input_dim
@@ -24,6 +26,10 @@ class C45(Classifier):
 		self.index = null
 		self.split_val = null
 		self.score = null
+		self.impurity_drop
+		self.t1 = t1
+		self.t2 = t2
+
 		
 
 	def build(self):
@@ -77,7 +83,7 @@ class C45(Classifier):
 				right.append(row)
 		return left, right
 
-	def get_split():
+	def get_split(self):
 		"""
 		Decides best split to minimize entropy. 'Value' is threshold to split along 'index'
 		"""
@@ -113,10 +119,38 @@ class C45(Classifier):
 
 	def is_label(self):
 		"""Checks if the data should be split or declared a leaf node"""
-		pass
-	def max_freq(self):
-		pass
+		classes = list(set(row[-1] for row in self.dataset))
+		size = float(len(self.dataset))
+		# avoid divide by zero
+		if size == 0:
+			return True
+		
+		p = []
+		for class_val in classes:
+			p.append([row[-1] for row in self.dataset].count(class_val) / size)
+		r = np.argmax(p)
+		q = 1 - p[r]
 
+		if size < t2 and  q < t1:
+			return True
+
+		return False
+
+
+
+	def max_freq(self):
+		classes = list(set(row[-1] for row in self.dataset))
+			
+		freq = []
+		for class_val in classes:
+			freq.append([row[-1] for row in self.dataset].count(class_val))
+		return np.argmax(freq)
+
+	def get_impurity(self):
+		return self.score
+
+	def get_impurity_drop(self):
+		pass
 
 
 	def predict(params, data):
@@ -134,4 +168,3 @@ class C45(Classifier):
 			return(0)
 		else:
 			return(1)
-			

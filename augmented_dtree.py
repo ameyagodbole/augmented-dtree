@@ -133,6 +133,20 @@ class DTree(object):
 			
 			node_to_process += 1
 
-	def predict(self, model_file, model_save_path, data_file):
-		self.load_tree(model_file, model_save_path)
-		df = pd.read_csv(self.data_file, names=['features'])
+	def predict(self, model_save_file, model_save_path, data_file):
+		"""
+		Iteratively predict on test data.
+		Arguments:
+		model_save_file:	File with saved tree structure
+		model_save_path:	Directory with saved node parameters
+		data_file:		Data file of test samples.
+						NOTE: label column will be ignored. Assumes the indexing o dataframe
+							is done using the assigned node i.e. samples reaching current node
+							can be accessed by df.ix[self.node_id]
+						NOTE: decision will be placed in predicted_label column of data_file
+		"""
+		self.load_tree(model_save_file, model_save_path)
+		df = pd.read_csv(data_file, index_col='assigned_node')
+		df['predicted_label'] = [0 for _ in range(len(df))]
+		for node in self.nodes:
+			node.predict(df)

@@ -118,7 +118,9 @@ class C45(Classifier):
 				writer.writerows(self.groups[j])
 
 	def is_label(self):
-		"""Checks if the data should be split or declared a leaf node"""
+		"""
+		Checks if the data should be split or declared a leaf node
+		"""
 		classes = list(set(row[-1] for row in self.dataset))
 		size = float(len(self.dataset))
 		# avoid divide by zero

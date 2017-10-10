@@ -72,28 +72,38 @@ class DTNode(object):
 		with open(os.path.join(savepath, 'node_{}.pkl'.format(self.node_id)), 'wb') as savefile:
 			pickle.dump(self.params, savefile, protocol=pickle.HIGHEST_PROTOCOL)
 
-	"""Load node paramaters from file"""
 	def load_node_params(self, path):
 		"""
 		Load node params to file
+		Arguments:
+		path:	Path to saved params file
 		"""
 		with open(os.path.join(path, 'node_{}.pkl'.format(self.node_id)), 'rb') as f:
-    		self.params = pickle.load(f)
+			self.params = pickle.load(f)
 
-	"""Predict on file. If not a label node, returns relevant child node"""
-	def predict(self, data):
+	def predict(self, df):
 		"""
-		Returns which child data should go to
+		Predict on dataframe. If not a label node, returns relevant child node id
+		Arguments:
+		df:		DataFrame of test samples.
+				NOTE: label column will be ignored. Assumes the indexing o dataframe
+					is done using the assigned node i.e. samples reaching current node
+					can be accessed by df.ix[self.node_id]
+				NOTE: decision will be placed in label column
 		"""
-    	return self.child_id[self.decision_maker.predict(self.params, data)]
-		
+		if self.is_decision_node:
+			df.ix[self.node_id,'label'] = self.label 
+		else:
+			self.decision_maker.predict(self.node_id, self.params, df, self.child_id)
 
-	"""Check if current node is label node"""
 	def is_label_node(self):
-		
+		"""
+		Check if current node is label node
+		"""
 		return self.decision_maker.is_label() 
 
-
-	"""Set label for decision node"""
 	def get_label(self):
+		"""
+		Set label for decision node
+		"""
 		return self.decision_maker.max_freq()

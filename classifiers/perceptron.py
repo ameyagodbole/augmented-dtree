@@ -95,6 +95,31 @@ class Perceptron(Classifier):
 
 		return params
 
+	def predict(self, node_id, params, data, child_id):
+		"""
+		Predicts on dataframe
+		Arguments:
+		node_id:	ID of node containing the decision_maker
+		params:		Dictionary of decision_maker parameters
+		data:		DataFrame of test samples.
+					NOTE: label column will be ignored. Assumes the indexing o dataframe
+						is done using the assigned node i.e. samples reaching current node
+						can be accessed by df.ix[self.node_id]
+		child_id:	List of child node IDs used to update the index
+		"""
+		x = df.ix[node_id, df.columns!='assigned_node' and df.columns!='label'].as_matrix()
+		Wx = x * params['W']
+		Wxb = Wx + b
+		preds = np.argmax(Wxb, 1)
+		output = np.asarray(child_id)[preds.astype(np.int32)].tolist()
+
+		as_list = np.asarray(df.index.tolist())
+		idx = np.where(as_list==node_id)[0]
+		as_list[idx] = output
+		df.index = as_list
+
+	def is_label(self):
+
 	def batch_generator(self, data_file):
 		"""
 		Generates batches for train operation

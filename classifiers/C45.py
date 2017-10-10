@@ -21,7 +21,6 @@ class C45(Classifier):
 		self.input_dim = input_dim
 		self.output_dim = 2
 		self.num_classes = num_classes
-		self.dataset = null
 		self.groups = null
 		self.index = null
 		self.split_val = null
@@ -36,8 +35,8 @@ class C45(Classifier):
 		pass
 
 	def train(self, data_file, balanced_file, child_id):
-		load_csv(balanced_file)
-		get_split()
+		dataset = pd.read_csv(balanced_file)
+		get_split(dataset)
 		split_dataset(data_file, child_id)
 		params = {}
 		params['index'] = self.index
@@ -45,9 +44,6 @@ class C45(Classifier):
 		return params
 
 	def load_csv(filename):
-		file = open(filename, "rb")
-		lines = reader(file)
-		self.dataset = list(lines)
 	
 	# Calculate the Gini index for a split dataset
 	def gini_index(groups, classes):
@@ -83,14 +79,14 @@ class C45(Classifier):
 				right.append(row)
 		return left, right
 
-	def get_split(self):
+	def get_split(self, dataset):
 		"""
 		Decides best split to minimize entropy. 'Value' is threshold to split along 'index'
 		"""
-		class_values = list(set(row[-1] for row in self.dataset))
+		class_values = list(set(row[-1] for row in dataset))
 		b_index, b_value, b_score, b_groups = 999, 999, 999, None
-		for index in range(len(self.dataset[0])-1):
-			for row in self.dataset:
+		for index in range(len(dataset[0])-1):
+			for row in dataset:
 				groups = test_split(index, row[index])
 				gini = gini_index(groups, class_values)
 				if gini < b_score:
@@ -117,35 +113,39 @@ class C45(Classifier):
 				writer = csv.writer(f)
 				writer.writerows(self.groups[j])
 
-	def is_label(self):
+	def is_label(self, data_file, count_threshold, purity_threshold):
 		"""
 		Checks if the data should be split or declared a leaf node
 		"""
-		classes = list(set(row[-1] for row in self.dataset))
-		size = float(len(self.dataset))
+		dataset = pd.read_csv(data_file)
+
+		classes = list(set(row[-1] for row in dataset))
+		size = float(len(dataset))
 		# avoid divide by zero
 		if size == 0:
 			return True
 		
 		p = []
 		for class_val in classes:
-			p.append([row[-1] for row in self.dataset].count(class_val) / size)
+			p.append([row[-1] for row in dataset].count(class_val) / size)
 		r = np.argmax(p)
 		q = 1 - p[r]
 
-		if size < t2 and  q < t1:
+		if size < count_threshold and  q < purity_threshold:
 			return True
 
 		return False
 
 
 
-	def max_freq(self):
-		classes = list(set(row[-1] for row in self.dataset))
+	def max_freq(self, data_file):
+		dataset = pd.read_csv(data_file)
+
+		classes = list(set(row[-1] for row in dataset))
 			
 		freq = []
 		for class_val in classes:
-			freq.append([row[-1] for row in self.dataset].count(class_val))
+			freq.append([row[-1] for row in dataset].count(class_val))
 		return np.argmax(freq)
 
 	def get_impurity(self):
@@ -154,19 +154,28 @@ class C45(Classifier):
 	def get_impurity_drop(self):
 		pass
 
-
-	def predict(params, data):
+def predict(self, node_id, params, data, child_id):
 		"""
-		Split dataset for child nodes
+		Predicts on dataframe
 		Arguments:
-		data_file:	File containing the data in csv format. NOTE: pass original data only
-		preds:		Decision maker predictions for each sample
+		node_id:	ID of node containing the decision_maker
+		params:		Dictionary of decision_maker parameters
+		data:		DataFrame of test samples.
+					NOTE: label column will be ignored. Assumes the indexing o dataframe
+						is done using the assigned node i.e. samples reaching current node
+						can be accessed by df.ix[self.node_id]
+		child_id:	List of child node IDs used to update the index
 		"""
-		base = os.path.split(data_file)
-		f = open(param_file, "r")
-		index = int(f.readline())
-		value = int(f.readline())
-		if data[index] < value:
-			return(0)
-		else:
-			return(1)
+		x = df.ix[node_id, df.columns!='assigned_node' and df.columns!='label'].as_matrix()
+		for index, row in df.iterrows():   		
+			if row[params['index']] < params['value']:
+				preds.append(0)
+			else:
+				preds.append(1)
+		
+		output = np.asarray(child_id)[preds.astype(np.int32)].tolist()
+
+		as_list = np.asarray(df.index.tolist())
+		idx = np.where(as_list==node_id)[0]
+		as_list[idx] = output
+		df.index = as_list

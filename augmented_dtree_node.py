@@ -60,10 +60,10 @@ class DTNode(object):
 			self.is_decision_node = True
 			self.label = self.get_label()
 			self.child_id = [-1]
-			return child_id
+			return self.child_id
 		self.decision_maker.build()
 		self.params = self.decision_maker.train(self.data_file, self.balanced_file, self.child_id)
-		return child_id
+		return self.child_id
 
 	def save_node_params(self, savepath):
 		"""
@@ -89,10 +89,10 @@ class DTNode(object):
 				NOTE: label column will be ignored. Assumes the indexing o dataframe
 					is done using the assigned node i.e. samples reaching current node
 					can be accessed by df.ix[self.node_id]
-				NOTE: decision will be placed in label column
+				NOTE: decision will be placed in predicted_label column
 		"""
 		if self.is_decision_node:
-			df.ix[self.node_id,'label'] = self.label 
+			df.ix[self.node_id,'predicted_label'] = self.label 
 		else:
 			self.decision_maker.predict(self.node_id, self.params, df, self.child_id)
 
@@ -100,10 +100,12 @@ class DTNode(object):
 		"""
 		Check if current node is label node
 		"""
-		return self.decision_maker.is_label() 
+		# TODO: get thresholds
+		# TODO: check impurity drop rate
+		return self.decision_maker.is_label(self.data_file, self.count_threshold, self.purity_threshold) 
 
 	def get_label(self):
 		"""
 		Set label for decision node
 		"""
-		return self.decision_maker.max_freq()
+		return self.decision_maker.max_freq(self.data_file)

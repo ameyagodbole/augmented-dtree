@@ -118,7 +118,25 @@ class Perceptron(Classifier):
 		as_list[idx] = output
 		df.index = as_list
 
-	def is_label(self):
+	def is_label(self, data_file, count_threshold, purity_threshold):
+		"""
+		Decide if current node impurity is below threshold
+		"""
+		df = pd.read_csv(data_file)
+		if len(df) < count_threshold:
+			counts = np.asarray([len(df[df['label']==c]) for c in range(self.num_classes)]).astype(np.float32)
+			if np.max(counts)/len(df) > purity_threshold:
+				return True
+		else:
+			return False
+
+	def max_freq(self, data_file):
+		"""
+		Decide if current node impurity is below threshold
+		"""
+		df = pd.read_csv(data_file)
+		counts = np.asarray([len(df[df['label']==c]) for c in range(self.num_classes)])
+		return np.argmax(counts).astype(np.int32)
 
 	def batch_generator(self, data_file):
 		"""

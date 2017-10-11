@@ -70,6 +70,10 @@ class DTree(object):
 
 			if child_list == [-1]:
 				continue
+				
+			if get_impurity_drop(curr_node, self.nodes[curr_node.parent_id]) < self.impurity_drop_threshold :
+				curr_node.child_id = []
+				continue
 			
 			for i in child_list:
 				# stop tree growth at max_depth
@@ -150,3 +154,12 @@ class DTree(object):
 		df['predicted_label'] = [0 for _ in range(len(df))]
 		for node in self.nodes:
 			node.predict(df)
+			
+	def get_impurity_drop(self, child_node, parent_node):
+		"""
+		Find impurity drop from parent to child node.
+		Arguments:
+		child_node:		Child node
+		parent_node:	Parent node	
+		"""
+		return parent_node.get_impurity() - child_node.get_impurity()

@@ -1,4 +1,5 @@
 
+
 import numpy as np
 import scipy.cluster.hierarchy as hcluster
 import scipy.cluster
@@ -15,10 +16,11 @@ class DataBalance(object):
 		"""
 		super(DataBalance, self).__init__()
 		self.input_file = input_file
-		self.data = null
+		self.data = None
 		self.classFreq = []
-		self.majClass = null
-		self.size_class = null
+		self.majClass = None
+		self.size_class = None
+		self.features = None
 
 
 	def cluster(self):
@@ -29,7 +31,7 @@ class DataBalance(object):
 		df = self.data
 		for i in range(max(df['label'])+1):
 
-			data = np.array(df.loc[df['label'] == i, 'features'].tolist())		
+			data = np.array(df.loc[df['label'] == i, self.features].tolist())		
 			clusters = hcluster.fclusterdata(data, thresh, criterion='distance',method='average')
 			df.loc[df['label']==i, 'cluster'] = clusters
 				
@@ -48,13 +50,13 @@ class DataBalance(object):
 
 		if( (s > 0) & ((dfTemp.shape[0]) > 0)):
 			dfRandom = dfTemp.sample(n = s, replace = True)
-			dataTemp = np.array( dfTemp['features'].tolist())
+			dataTemp = np.array( dfTemp[self.features].tolist())
 			mean = np.mean(dataTemp , axis = 0)
 
 			for k,r in dfRandom.iterrows():
-				a = r['features']
+				a = r[self.features]
 				newdata = (np.array(a) + np.array(mean)) / 2
-				df2 = pd.DataFrame([[newdata,i,j,0]],columns=['features','label','cluster','original'])
+				df2 = pd.DataFrame([[newdata,i,j,0]],columns=[self.features,'label','cluster','original'])
 				df = pd.concat([df,df2])
 
 		return df
@@ -111,53 +113,18 @@ class DataBalance(object):
 		self.load()
 		self.cluster()
 		dfBalanced = self.balance()
-		out_csv = dfBalanced[['features','label']]
-		out_csv.to_csv(out_file_name)
+		out_csv = dfBalanced[[self.features,'label']]
+		out_csv.to_csv(out_file_name,index=False)
 
 
 	def load(self):
 		"""
 		Loads data from csv file to a dataframe
 		"""
-		df = pd.read_csv(self.input_file, names=['features', 'label'])
+		df = pd.read_csv(self.input_file)
+		self.features = [col for col in df.columns if col!='label']
+
 		df['cluster'] = np.nan	
 		df['original'] = 1
 		self.data = df
 
-"""
-def main():
-	numData=0
-	numFeat=0
-
-	with open("iristrain.txt") as f:
-	    content = f.readlines()
-
-	content = [x.strip() for x in content] 
-
-	content.pop(0)
-	content.pop(0)
-
-	data=[]
-	Y=[]
-	label=[]
-	cnt=0
-
-	for i in content:
-		cnt=cnt+1
-		if(cnt % 5 == 0):
-			data.append(Y[:])
-			label.append(int(i))
-			del Y[:]
-
-		else:
-			Y.append(float(i))
-
-	df = pd.DataFrame({'features':data, 'label':label})
-	df['cluster'] = np.nan	
-	df['original'] = 1
-
-	dataBalance(df, 'out.csv')
-
-if __name__ == "__main__":
-    main()
-"""

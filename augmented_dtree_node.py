@@ -8,7 +8,7 @@ class DTNode(object):
 	DTNode class to define DTree decisions
 	"""
 	
-	def __init__(self, node_id, parent_id, node_depth, num_classes, num_child, data_file, balanced_file):
+	def __init__(self, node_id, parent_id, node_depth, num_classes, num_child, data_file, balanced_file, count_threshold, purity_threshold):
 		"""
 		Arguments:
 		node_id:	Index of node in tree nodelist
@@ -31,6 +31,8 @@ class DTNode(object):
 		self.data_file = data_file
 		self.balanced_file = balanced_file
 		self.decision_maker = None
+		self.count_threshold = count_threshold
+		self.purity_threshold = purity_threshold
 
 		self.params = {}
 		self.trained = False
@@ -109,7 +111,6 @@ class DTNode(object):
 		Set label for decision node
 		"""
 		return self.decision_maker.max_freq(self.data_file)
-	
 	def get_impurity(self):
 		"""
 		Set label for decision node

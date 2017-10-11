@@ -21,11 +21,11 @@ class C45(Classifier):
 		self.input_dim = input_dim
 		self.output_dim = 2
 		self.num_classes = num_classes
-		self.groups = null
-		self.index = null
-		self.split_val = null
-		self.score = null
-		self.impurity_drop
+		self.groups = None
+		self.index = None
+		self.split_val = None
+		self.score = None
+		self.impurity_drop = None
 		self.count_threshold = count_threshold
 		self.purity_threshold = purity_threshold
 
@@ -33,20 +33,13 @@ class C45(Classifier):
 	def build(self):
 		pass
 
-	def train(self, data_file, balanced_file, child_id):
-		dataset = pd.read_csv(balanced_file)
-		get_split(dataset)
-		split_dataset(data_file, child_id)
-		params = {}
-		params['index'] = self.index
-		params['value'] = self.split_val
-		return params
+	
 
 	def load_csv(filename):
 		df = pd.read_csv('iris_test.csv', index_col='assigned_node')
 	
 	# Calculate the impurity index for a split dataset
-	def impurity_index(groups, classes):
+	def impurity_index(self, groups, classes):
 		# count all samples at split point
 		n_instances = float(sum([len(group) for group in groups]))
 		# sum weighted impurity index for each group
@@ -67,16 +60,18 @@ class C45(Classifier):
 			impurity += score * (size / n_instances)
 		return impurity
 
-	def test_split(index, value):
+	def test_split(self, index, value, dataset):
 		"""
 		Forms two groups for a given value and index.
 		"""
-		left, right = list(), list()
-		for row in self.dataset:
+		left = pd.DataFrame(data=None, columns=dataset.columns,index=dataset.index)
+		right = pd.DataFrame(data=None, columns=dataset.columns,index=dataset.index)
+
+		for idx, row in dataset.iterrows():
 			if row[index] < value:
-				left.append(row)
+				left.append(row, ignore_index = True)
 			else:
-				right.append(row)
+				right.append(row, ignore_index = True)
 		return left, right
 
 	def get_split(self, dataset):
@@ -85,12 +80,14 @@ class C45(Classifier):
 		"""
 		class_values = list(set(row[-1] for row in dataset))
 		b_index, b_value, b_score, b_groups = 999, 999, 999, None
-		for index in range(len(dataset[0])-1):
-			for row in dataset:
-				groups = test_split(index, row[index])
-				impurity = impurity_index(groups, class_values)
-				if impurity < b_score:
-					b_index, b_value, b_score, b_groups = index, row[index], impurity, groups
+		for index in dataset.columns:
+			if index!='label':
+				for idx, row in dataset.iterrows():
+					value = row[index]
+					groups = self.test_split(index, value, dataset)
+					impurity = self.impurity_index(groups, class_values)
+					if impurity < b_score:
+						b_index, b_value, b_score, b_groups = index, row[index], impurity, groups
 		self.value = b_value
 		self.index = b_index
 		self.groups = b_groups
@@ -108,10 +105,19 @@ class C45(Classifier):
 		base = os.path.split(data_file)
 		
 		for j in range(self.output_dim):
-			with open(os.path.join(base[0],'data_'+str(child_id[j])+'.csv'), "wb") as f:
+			self.groups[j].to_csv(os.path.join(base[0],'data_'+str(child_id[j])+'.csv'))
 
-				writer = csv.writer(f)
-				writer.writerows(self.groups[j])
+			
+
+	def train(self, data_file, balanced_file, child_id):
+
+		dataset = pd.read_csv(balanced_file)
+		self.get_split(dataset)
+		self.split_dataset(data_file, child_id)
+		params = {}
+		params['index'] = self.index
+		params['value'] = self.split_val
+		return params
 
 	def is_label(self, data_file, count_threshold, purity_threshold):
 		"""
@@ -176,3 +182,5 @@ class C45(Classifier):
 		idx = np.where(as_list==node_id)[0]
 		as_list[idx] = output
 		df.index = as_list
+
+		

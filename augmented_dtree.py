@@ -8,7 +8,7 @@ from dataBalancing import DataBalance
 class DTree(object):
 	"""DTree class to store tree structure"""
 	
-	def __init__(self, num_classes, num_child, max_depth, data_type, data_dimension, data_balance, decision_type):
+	def __init__(self, num_classes, num_child, max_depth, data_type, data_dimension, data_balance, decision_type, count_threshold, purity_threshold, impurity_drop_threshold):
 		"""
 		Arguments:
 		num_classes: Number of classes in data
@@ -29,11 +29,16 @@ class DTree(object):
 		self.decision_type = decision_type
 		self.nodes = []
 		self.built = False
+		self.count_threshold = count_threshold
+		self.purity_threshold = purity_threshold
+		self.impurity_drop_threshold = impurity_drop_threshold
 		
-		#if self.data_type == 'numeric' and self.num_classes>2:
-		#	self.decision_type = Perceptron
-		#else:
-		#	raise NotImplementedError('Feature not implemented')
+		if self.decision_type == 'Perceptron':
+			self.decision_type = Perceptron
+		elif self.decision_type == 'C45':
+			self.decision_type = C45
+		else:
+			raise NotImplementedError('Feature not implemented')
 		
 		
 
@@ -49,28 +54,32 @@ class DTree(object):
 		base = os.path.split(data_file)[0]
 		node_to_process = 0
 		new_node = DTNode(node_id=0, parent_id=0, node_depth=0, num_classes=self.num_classes,
-		 num_child=self.num_child, data_file=data_file)
+		 num_child=self.num_child, data_file=data_file, balanced_file = data_file, 
+		 count_threshold = self.count_threshold, purity_threshold = self.purity_threshold)
 		self.nodes.append(new_node)
 		while True:
 			try:
 				curr_node = self.nodes[node_to_process]
 			except IndexError:
-				print "{} nodes processed. Tree building done.".format(len(self.nodes))
+				print ("{} nodes processed. Tree building done.".format(len(self.nodes)))
 				break
 			curr_node.set_decision_maker(self.decision_type(input_dim=self.data_dimension, output_dim=self.num_child,
-				 num_classes=self.num_classes, epochs=epochs_per_node, batch_size=batch_size))
+				 num_classes=self.num_classes, epochs=epochs_per_node, batch_size=batch_size, 
+				 count_threshold = self.count_threshold, purity_threshold = self.purity_threshold))
 			curr_node.set_child_id_start(len(self.nodes))
-			if self.data_balance:
-				db = DataBalance(os.path.join(base,'data_{}.csv'.format(i)) )
-				db.data_balance(os.path.join(base,'b_data_{}.csv'.format(i)))
+			
 				# databalance(input=os.path.join(base,'data_{}.csv'.format(i)), output=os.path.join(base,'b_data_{}.csv'.format(i)))
 				
 			child_list = curr_node.train()
 			curr_node.save_node_params(model_save_path)
 
+			if self.data_balance:
+				db = DataBalance(os.path.join(base,'data_{}.csv'.format(node_to_process+1)) )
+				db.data_balance(os.path.join(base,'b_data_{}.csv'.format(node_to_process+1)))
+
 			if child_list == [-1]:
 				continue
-				
+
 			if get_impurity_drop(curr_node, self.nodes[curr_node.parent_id]) < self.impurity_drop_threshold :
 				curr_node.child_id = []
 				continue
@@ -115,7 +124,7 @@ class DTree(object):
 			try:
 				curr_node = self.nodes[node_to_process]
 			except IndexError:
-				print "{} nodes processed. Tree building done.".format(len(self.nodes))
+				print ("{} nodes processed. Tree building done.".format(len(self.nodes)))
 				break
 			curr_node.set_decision_maker(self.decision_type(input_dim=self.data_dimension, output_dim=self.num_child,
 				 num_classes=self.num_classes, epochs=epochs_per_node, batch_size=batch_size))
@@ -154,7 +163,7 @@ class DTree(object):
 		df['predicted_label'] = [0 for _ in range(len(df))]
 		for node in self.nodes:
 			node.predict(df)
-			
+
 	def get_impurity_drop(self, child_node, parent_node):
 		"""
 		Find impurity drop from parent to child node.

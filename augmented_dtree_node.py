@@ -109,3 +109,9 @@ class DTNode(object):
 		Set label for decision node
 		"""
 		return self.decision_maker.max_freq(self.data_file)
+	
+	def get_impurity(self):
+		"""
+		Set label for decision node
+		"""
+		return self.decision_maker.get_impurity()

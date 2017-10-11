@@ -8,7 +8,7 @@ from classifiers.classifier import Classifier
 class C45(Classifier):
 	"""Implement a C4.5 classifier"""
 
-	def __init__(self, input_dim, output_dim, num_classes, epochs, batch_size, t1, t2):
+	def __init__(self, input_dim, output_dim, num_classes, epochs, batch_size, count_threshold, purity_threshold):
 		"""
 		Arguments:
 		input_dim:	Dimension of input data
@@ -26,11 +26,10 @@ class C45(Classifier):
 		self.split_val = null
 		self.score = null
 		self.impurity_drop
-		self.t1 = t1
-		self.t2 = t2
+		self.count_threshold = count_threshold
+		self.purity_threshold = purity_threshold
 
 		
-
 	def build(self):
 		pass
 
@@ -44,13 +43,14 @@ class C45(Classifier):
 		return params
 
 	def load_csv(filename):
+		df = pd.read_csv('iris_test.csv', index_col='assigned_node')
 	
-	# Calculate the Gini index for a split dataset
-	def gini_index(groups, classes):
+	# Calculate the impurity index for a split dataset
+	def impurity_index(groups, classes):
 		# count all samples at split point
 		n_instances = float(sum([len(group) for group in groups]))
-		# sum weighted Gini index for each group
-		gini = 0.0
+		# sum weighted impurity index for each group
+		impurity = 0.0
 		for group in groups:
 			size = float(len(group))
 			# avoid divide by zero
@@ -64,8 +64,8 @@ class C45(Classifier):
 				if p != 0.0:
 					score -= p * np.log2(p)
 			# weight the group score by its relative size
-			gini += score * (size / n_instances)
-		return gini
+			impurity += score * (size / n_instances)
+		return impurity
 
 	def test_split(index, value):
 		"""
@@ -88,9 +88,9 @@ class C45(Classifier):
 		for index in range(len(dataset[0])-1):
 			for row in dataset:
 				groups = test_split(index, row[index])
-				gini = gini_index(groups, class_values)
-				if gini < b_score:
-					b_index, b_value, b_score, b_groups = index, row[index], gini, groups
+				impurity = impurity_index(groups, class_values)
+				if impurity < b_score:
+					b_index, b_value, b_score, b_groups = index, row[index], impurity, groups
 		self.value = b_value
 		self.index = b_index
 		self.groups = b_groups
@@ -151,10 +151,7 @@ class C45(Classifier):
 	def get_impurity(self):
 		return self.score
 
-	def get_impurity_drop(self):
-		pass
-
-def predict(self, node_id, params, data, child_id):
+	def predict(self, node_id, params, data, child_id):
 		"""
 		Predicts on dataframe
 		Arguments:

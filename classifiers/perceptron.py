@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 import logging
-from classifier import Classifier
+from classifiers.classifier import Classifier
 
 class Perceptron(Classifier):
 	"""Implement a single layer Perceptron"""
@@ -105,7 +105,7 @@ class Perceptron(Classifier):
 
 		return params
 
-	def predict(self, node_id, params, data, child_id):
+	def predict(self, node_id, params, df, child_id):
 		"""
 		Predicts on dataframe
 		Arguments:
@@ -117,9 +117,9 @@ class Perceptron(Classifier):
 						can be accessed by df.ix[self.node_id]
 		child_id:	List of child node IDs used to update the index
 		"""
-		x = df.ix[node_id, df.columns!='assigned_node' and df.columns!='label'].as_matrix()
-		Wx = x * params['W']
-		Wxb = Wx + b
+		x = df.ix[node_id, (df.columns!='predicted_label') & (df.columns!='label')].as_matrix()
+		Wx = x.dot(params['W'])
+		Wxb = Wx + params['b']
 		preds = np.argmax(Wxb, 1)
 		output = np.asarray(child_id)[preds.astype(np.int32)].tolist()
 

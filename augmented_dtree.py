@@ -5,6 +5,8 @@ from classifiers.perceptron import Perceptron
 from classifiers.C45 import C45
 from dataBalancing import DataBalance
 from pkg_logger import *
+import pickle
+import pandas as pd
 
 class DTree(object):
 	"""DTree class to store tree structure"""
@@ -148,8 +150,8 @@ class DTree(object):
 		"""
 		logging.debug('Load called')
 		structure = {}
-		with open(os.path.join(model_file), 'rb') as modelfile:
-			structure = pickle.load(f)
+		with open(os.path.join(model_save_file), 'rb') as modelfile:
+			structure = pickle.load(modelfile)
 
 		self.nodes = [None for _ in range(len(structure.keys()))]
 		for i in structure.keys():
@@ -158,7 +160,7 @@ class DTree(object):
 				 num_classes=self.num_classes, num_child=structure[i]['num_child'])
 			curr_node = self.nodes[i]
 			curr_node.set_decision_maker(self.decision_type(input_dim=self.data_dimension, output_dim=self.num_child,
-				 num_classes=self.num_classes, epochs=epochs_per_node, batch_size=batch_size))
+				 num_classes=self.num_classes, epochs=None, batch_size=None))
 			curr_node.child_id = structure[i]['child_id']
 			curr_node.is_decision_node = structure[i]['is_decision_node']
 			curr_node.label = structure[i]['label']
@@ -182,6 +184,8 @@ class DTree(object):
 		df['predicted_label'] = [0 for _ in range(len(df))]
 		for node in self.nodes:
 			node.predict(df)
+		df.to_csv('output.csv',index=False)
+
 
 	def get_impurity_drop(self, parent_node, child_node):
 		"""
@@ -193,3 +197,4 @@ class DTree(object):
 		if child_node.node_id == 0:
 			return float('inf')
 		return (parent_node.get_impurity() - child_node.get_impurity())
+

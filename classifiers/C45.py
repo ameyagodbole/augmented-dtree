@@ -22,7 +22,6 @@ class C45(Classifier):
 		self.input_dim = input_dim
 		self.output_dim = 2
 		self.num_classes = num_classes
-		self.groups = None
 		self.index = None
 		self.split_val = None
 		self.score = None
@@ -65,11 +64,10 @@ class C45(Classifier):
 					groups = (dataset.loc[dataset[index]<value],dataset.loc[dataset[index]>=value])
 					impurity = self.impurity_index(groups, class_values)
 					if impurity < b_score:
-						b_index, b_value, b_score, b_groups = index, row[index], impurity, groups
+						b_index, b_value, b_score = index, row[index], impurity
 		self.value = b_value
 		self.index = b_index
-		self.groups = b_groups
-		self.score = b_score
+		
 
 
 	def split_dataset(self, data_file, child_id):
@@ -81,9 +79,13 @@ class C45(Classifier):
 		child_id:	List of child nodes (used in filename of split data)
 		"""
 		base = os.path.split(data_file)
+		dataset = pd.read_csv(data_file)
+		groups = (dataset.loc[dataset[self.index]<self.value],dataset.loc[dataset[self.index]>=self.value])
+		class_values = np.unique(dataset['label'])
+		self.score = self.impurity_index(groups, class_values)
 		
 		for j in range(self.output_dim):
-			self.groups[j].to_csv(os.path.join(base[0],'data_'+str(child_id[j])+'.csv'),index=False)
+			groups[j].to_csv(os.path.join(base[0],'data_'+str(child_id[j])+'.csv'),index=False)
 
 			
 
@@ -94,7 +96,7 @@ class C45(Classifier):
 		self.split_dataset(data_file, child_id)
 		params = {}
 		params['index'] = self.index
-		params['value'] = self.split_val
+		params['value'] = self.value
 		return params
 
 	def is_label(self, data_file, count_threshold, purity_threshold):
@@ -128,7 +130,7 @@ class C45(Classifier):
 	def get_impurity(self):
 		return self.score
 
-	def predict(self, node_id, params, data, child_id):
+	def predict(self, node_id, params, df, child_id):
 		"""
 		Predicts on dataframe
 		Arguments:
@@ -140,15 +142,16 @@ class C45(Classifier):
 						can be accessed by df.ix[self.node_id]
 		child_id:	List of child node IDs used to update the index
 		"""
-		x = df.ix[node_id, df.columns!='assigned_node' and df.columns!='label']
+		cols = [col for col in df.columns if col not in ['predicted_label', 'label']]
+		x = df.ix[node_id, cols]
 		preds = []
-		for index, row in x.iterrows():   		
+		for index, row in x.iterrows():
 			if row[params['index']] < params['value']:
 				preds.append(0)
 			else:
 				preds.append(1)
 		
-		output = np.asarray(child_id)[np.arange(len(preds)),preds.astype(np.int32)].tolist()
+		output = np.asarray(child_id)[preds].tolist()
 
 		as_list = np.asarray(df.index.tolist())
 		idx = np.where(as_list==node_id)[0]

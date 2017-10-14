@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import pickle
+import logging
 from classifiers.classifier import Classifier
 
 class DTNode(object):
@@ -8,7 +9,8 @@ class DTNode(object):
 	DTNode class to define DTree decisions
 	"""
 	
-	def __init__(self, node_id, parent_id, node_depth, num_classes, num_child, data_file, balanced_file, count_threshold, purity_threshold):
+	def __init__(self, node_id, parent_id, node_depth, num_classes, num_child,
+		data_file=None, balanced_file=None, count_threshold=None, purity_threshold=None):
 		"""
 		Arguments:
 		node_id:	Index of node in tree nodelist
@@ -18,6 +20,8 @@ class DTNode(object):
 		num_child:	Number of child nodes of node
 		data_file:	Original data
 		balanced_file:	Balanced data
+		count_threshold:	Maximum samples needed to consider purity-based stoppping of tree growth
+		purity_threshold:	Percentage of most common class for purity-based stoppping of tree growth
 		"""
 		super(DTNode, self).__init__()
 		self.node_id = node_id
@@ -36,11 +40,12 @@ class DTNode(object):
 
 		self.params = {}
 		self.trained = False
-
 	
 	def set_decision_maker(self, decision_maker):
 		"""
 		Set the decision maker for the current node
+		Arguments:
+		decision_maker:	Object of type Classifier
 		"""
 		if not isinstance(decision_maker, Classifier):
 			raise TypeError("DTNode received decision_maker of type: {}".format(type(decision_maker)))
@@ -49,6 +54,8 @@ class DTNode(object):
 	def set_child_id_start(self, child_id_start):
 		"""
 		Set the child_id_start for the current node
+		Arguments:
+		child_id_start:	Starting id of child nodes
 		"""
 		if child_id_start < 0:
 			raise IndexError("DTNode received negative child_id_start : {}".format(child_id_start))
@@ -59,9 +66,12 @@ class DTNode(object):
 		Train on data and save params in Node
 		"""
 		if self.is_label_node() or self.num_child==0:
+			if(self.num_child==0):
+				logging.debug('Set {} to label based on depth'.format(self.node_id))
 			self.is_decision_node = True
 			self.label = self.get_label()
-			self.child_id = [-1]
+			self.num_child = 0
+			self.child_id = []
 			return self.child_id
 		self.decision_maker.build()
 		self.params = self.decision_maker.train(self.data_file, self.balanced_file, self.child_id)
@@ -70,6 +80,8 @@ class DTNode(object):
 	def save_node_params(self, savepath):
 		"""
 		Save node params to file
+		Arguments:
+		savepath:	Directory to save node params dictionary
 		"""
 		with open(os.path.join(savepath, 'node_{}.pkl'.format(self.node_id)), 'wb') as savefile:
 			pickle.dump(self.params, savefile, protocol=pickle.HIGHEST_PROTOCOL)
@@ -102,8 +114,6 @@ class DTNode(object):
 		"""
 		Check if current node is label node
 		"""
-		# TODO: get thresholds
-		# TODO: check impurity drop rate
 		return self.decision_maker.is_label(self.data_file, self.count_threshold, self.purity_threshold) 
 
 	def get_label(self):
@@ -111,6 +121,7 @@ class DTNode(object):
 		Set label for decision node
 		"""
 		return self.decision_maker.max_freq(self.data_file)
+	
 	def get_impurity(self):
 		"""
 		Set label for decision node

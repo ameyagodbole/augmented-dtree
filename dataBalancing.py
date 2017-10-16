@@ -4,6 +4,16 @@ import scipy.cluster.hierarchy as hcluster
 import scipy.cluster
 import scipy.stats
 import pandas as pd
+import time
+
+def timing(f):
+	def wrap(*args):
+		time1 = time.time()
+		ret = f(*args)
+		time2 = time.time()
+		print '%s function took %0.3f ms' % (f.func_name, (time2-time1)*1000.0)
+		return ret
+	return wrap
 
 class DataBalance(object):
 	"""DataBalance class for data balancing"""
@@ -33,7 +43,8 @@ class DataBalance(object):
 			if data.shape[0] > 0:	
 				clusters = hcluster.fclusterdata(data, thresh, criterion='distance',method='average')
 				df.loc[df['label']==i, 'cluster'] = clusters.astype(np.int32)
-				
+	
+	@timing	
 	def oversample(self, label, cluster, size):
 		"""
 		Oversamples the cluster 'cluster' of class 'label' to the required size.
@@ -51,13 +62,14 @@ class DataBalance(object):
 			dfRandom = dfTemp.sample(n = s, replace = True)
 			dataTemp = dfTemp[self.features].as_matrix()
 			mean = np.mean(dataTemp , axis = 0)
-
+			allnewdata = []
 			for k,r in dfRandom.iterrows():
 				a = r[self.features]
 				frac = np.random.random()
 				newdata = (1-frac) * np.array(a) + frac * np.array(mean)
-				df2 = pd.DataFrame([newdata.tolist() + [label,cluster,0]],columns=self.features+['label','cluster','original'])
-				df = pd.concat([df,df2],ignore_index=False)
+				allnewdata.append(newdata.tolist() + [label,cluster,0])
+			df2 = pd.DataFrame(allnewdata,columns=self.features+['label','cluster','original'])
+			df = pd.concat([df,df2],ignore_index=False)
 
 		return df
 
@@ -103,7 +115,7 @@ class DataBalance(object):
 		#print(df.shape)
 		return df
 
-
+	@timing
 	def data_balance(self, out_file_name):
 		"""
 		Balances the data and saves it in a csv file.

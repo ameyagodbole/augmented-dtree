@@ -4,6 +4,17 @@ import numpy as np
 import pandas as pd
 import logging
 from classifiers.classifier import Classifier
+import time
+
+def timing(f):
+	def wrap(*args):
+		time1 = time.time()
+		ret = f(*args)
+		time2 = time.time()
+		print '%s function took %0.3f ms' % (f.func_name, (time2-time1)*1000.0)
+		return ret
+	return wrap
+
 
 class Perceptron(Classifier):
 	"""Implement a single layer Perceptron"""
@@ -39,12 +50,13 @@ class Perceptron(Classifier):
 				self.data = tf.placeholder(tf.float32, [None, self.input_dim], name="Xin")
 				# one hot encoded sample vs target class
 				self.label = tf.placeholder(tf.float32, [None, self.num_classes], name="Y")
+				self.lr = tf.placeholder(tf.float32, [], name="lr")
 				global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name='global_step')
 			with tf.variable_scope('perceptron') as scope:
 				self.W = tf.get_variable('weight', shape=[self.input_dim, self.output_dim], dtype=tf.float32,
 					initializer=tf.contrib.layers.xavier_initializer())
 				self.b = tf.get_variable('bias', shape=[1, self.output_dim], dtype=tf.float32,
-					initializer=tf.contrib.layers.xavier_initializer())
+					initializer=tf.ones_initializer())
 				# q.shape = [None, output_dim]
 				self.q = tf.nn.softmax(tf.matmul(self.data, self.W, name='matmul') + self.b, name='softmax')
 			with tf.variable_scope('loss') as scope:
@@ -63,10 +75,11 @@ class Perceptron(Classifier):
 				self.loss = tf.reduce_sum(tf.multiply(H, q_sum/N), name='weighted_entropy')
 			with tf.variable_scope('opt') as scope:
 				# TODO: pass learning rate
-				self.train_op = tf.train.AdamOptimizer(1e-2).minimize(self.loss, global_step=global_step)
+				self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss, global_step=global_step)
 
 		self.built = True
 
+	@timing
 	def train(self, data_file, balanced_file, child_id):
 		"""
 		Train on data and return params
@@ -82,20 +95,23 @@ class Perceptron(Classifier):
 		self.session = tf.Session(graph = self.graph)
 		with self.session as sess:
 			sess.run(tf.global_variables_initializer())
+			df = pd.read_csv(balanced_file)
+			lr = np.float32(self.batch_size)/len(df)
 			for e in range(self.epochs):
 				epoch_loss = 0.0
 				num_samples = 0
-				for batch in self.batch_generator(balanced_file):
-					_, bloss = sess.run([self.train_op, self.loss], feed_dict={self.data: batch[0], self.label:batch[1]})
+				for batch in self.batch_generator(df):
+					_, bloss = sess.run([self.train_op, self.loss], feed_dict={self.data: batch[0], self.label:batch[1], self.lr:lr})
 					epoch_loss += bloss*batch[0].shape[0]
 					num_samples += batch[0].shape[0]
-				if e%20==0:
+				if e%10==0:
 					logging.info("End of epoch {}".format(e+1))
 					logging.info("Average epoch loss : {}".format(epoch_loss/num_samples))
 
 			logging.debug('Running predictions on {} for generating split'.format(data_file))
 			preds = []
-			for batch in self.batch_generator(data_file, shuffle=False):
+			dfo = pd.read_csv(data_file)
+			for batch in self.batch_generator(dfo, shuffle=False):
 				pred = sess.run(self.q, feed_dict={self.data: batch[0], self.label:batch[1]})
 				preds += pred.tolist()
 			self.split_dataset(data_file, np.asarray(preds), child_id)
@@ -105,6 +121,7 @@ class Perceptron(Classifier):
 
 		return params
 
+	@timing
 	def predict(self, node_id, params, df, child_id):
 		"""
 		Predicts on dataframe
@@ -156,14 +173,13 @@ class Perceptron(Classifier):
 		counts = np.asarray([len(df[df['label']==c]) for c in range(self.num_classes)])
 		return np.argmax(counts).astype(np.int32)
 
-	def batch_generator(self, data_file, shuffle=True):
+	def batch_generator(self, file, shuffle=True):
 		"""
 		Generates batches for train operation
 		Arguments:
-		data_file:	File containing the data in csv format
+		data_file:	pandas DataFrame
 		shuffle:	Whether to shuffle input
 		"""
-		file = pd.read_csv(data_file)
 		indices = np.arange(len(file))
 		if shuffle:
 			np.random.shuffle(indices)

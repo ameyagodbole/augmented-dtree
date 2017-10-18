@@ -5,15 +5,16 @@ import scipy.cluster
 import scipy.stats
 import pandas as pd
 import time
-
+'''
 def timing(f):
 	def wrap(*args):
 		time1 = time.time()
 		ret = f(*args)
 		time2 = time.time()
-		print '%s function took %0.3f ms' % (f.func_name, (time2-time1)*1000.0)
+		print ('%s function took %0.3f ms' % (f.func_name, (time2-time1)*1000.0))
 		return ret
 	return wrap
+'''
 
 class DataBalance(object):
 	"""DataBalance class for data balancing"""
@@ -36,15 +37,16 @@ class DataBalance(object):
 		"""
 		Clusters the data of each class.
 		"""
-		thresh = 1
+		
 		df = self.data
+		thresh = 10
 		for i in range(self.num_classes):
 			data = df.loc[df['label'] == i, self.features].as_matrix()
-			if data.shape[0] > 0:	
-				clusters = hcluster.fclusterdata(data, thresh, criterion='distance',method='average')
+			if len(data)>0:	
+				clusters = hcluster.fclusterdata(data, thresh, criterion='maxclust', method='average')
 				df.loc[df['label']==i, 'cluster'] = clusters.astype(np.int32)
 	
-	@timing	
+
 	def oversample(self, label, cluster, size):
 		"""
 		Oversamples the cluster 'cluster' of class 'label' to the required size.
@@ -57,21 +59,36 @@ class DataBalance(object):
 		dfTemp = df.loc[(df['label'] == label) & (df['cluster'] == cluster)]
 	
 		s = size - dfTemp.shape[0]
+		df2 = None
 
 		if( (s > 0) & ((dfTemp.shape[0]) > 0)):
 			dfRandom = dfTemp.sample(n = s, replace = True)
 			dataTemp = dfTemp[self.features].as_matrix()
-			mean = np.mean(dataTemp , axis = 0)
+			mean = np.array(np.mean(dataTemp , axis = 0))
 			allnewdata = []
+			a = dfRandom[self.features]
+			frac = [np.random.random() for i in range(dfRandom.shape[0])]
+			b = np.asarray([[(1-f) for row in range(len(self.features))]for f in frac]) * np.array(a)
+			c = np.asarray([[f for row in range(len(self.features))] for f in frac])* np.asarray([mean for m in range(dfRandom.shape[0])])
+			newdata = b+c
+			newdata = newdata.tolist()
+			df2 = pd.DataFrame(newdata,columns=self.features)
+			df2['label'] = label
+			df2['cluster'] = cluster
+			df2['original'] = 0
+			'''
+
 			for k,r in dfRandom.iterrows():
 				a = r[self.features]
 				frac = np.random.random()
-				newdata = (1-frac) * np.array(a) + frac * np.array(mean)
+				newdata = (1-frac) * np.array(a) + frac * mean
 				allnewdata.append(newdata.tolist() + [label,cluster,0])
 			df2 = pd.DataFrame(allnewdata,columns=self.features+['label','cluster','original'])
-			df = pd.concat([df,df2],ignore_index=False)
+			'''
+			#df = pd.concat([df,df2],ignore_index=False)
+			
 
-		return df
+		return df2
 
 	def get_params(self):
 		"""
@@ -101,29 +118,31 @@ class DataBalance(object):
 		"""
 		Increases the size of every class to that of the balanced majority class
 		"""
-		
+		oversample = self.oversample
 		df = self.data
 		self.get_params()
 
 		for i in range(self.num_classes):
 			dfTemp = df.loc[(df['label'] == i)]
 			num_clusters = (int(len(np.unique(dfTemp['cluster']))))
+			print('Balancing Class {}'.format(i))
 
 			for j in np.unique(dfTemp['cluster']):
-				df = self.oversample(i, j, int(np.ceil(float(self.size_class)/num_clusters)))
+				df = pd.concat([df,oversample(i, j, int(np.ceil(float(self.size_class)/num_clusters)))],ignore_index=False)
 
 		#print(df.shape)
 		return df
 
-	@timing
+
 	def data_balance(self, out_file_name):
 		"""
 		Balances the data and saves it in a csv file.
 		Arguments:
 		name: 	name of csv file to save to
-
 		"""
 		self.load()
+		if self.data.empty:
+			return
 		self.cluster()
 		dfBalanced = self.balance()
 		out_csv = dfBalanced[self.features+['label']]

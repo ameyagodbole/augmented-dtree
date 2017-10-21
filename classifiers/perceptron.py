@@ -53,12 +53,17 @@ class Perceptron(Classifier):
 				self.lr = tf.placeholder(tf.float32, [], name="lr")
 				global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name='global_step')
 			with tf.variable_scope('perceptron') as scope:
+				clip_val_min = tf.constant(1e-37, dtype=tf.float32)
+				clip_val_max = tf.constant(1, dtype=tf.float32)
+				tfinf = tf.constant(np.inf, dtype=tf.float32)
 				self.W = tf.get_variable('weight', shape=[self.input_dim, self.output_dim], dtype=tf.float32,
 					initializer=tf.contrib.layers.xavier_initializer())
 				self.b = tf.get_variable('bias', shape=[1, self.output_dim], dtype=tf.float32,
 					initializer=tf.ones_initializer())
+				W_norm = tf.clip_by_value(tf.norm(self.W, ord=1, axis=0, keep_dims=True),
+				 clip_value_min=clip_val_min, clip_value_max=tfinf)
 				# q.shape = [None, output_dim]
-				self.q = tf.nn.softmax(tf.matmul(self.data, self.W, name='matmul') + self.b, name='softmax')
+				self.q = tf.nn.softmax((tf.matmul(self.data, self.W, name='matmul') + self.b)/W_norm, name='softmax')
 			with tf.variable_scope('loss') as scope:
 				# n.shape = [num_classes, output_dim]
 				n = tf.matmul(tf.matrix_transpose(self.label, name='label_transpose'), self.q, name='n')
@@ -67,14 +72,11 @@ class Perceptron(Classifier):
 				N = tf.reduce_sum(q_sum, name='N')
 				# p.shape = [num_classes, output_dim]
 				p = tf.divide(n, q_sum, name='p')
-				clip_val_min = tf.Variable(1e-37, dtype=tf.float32, trainable=False)
-				clip_val_max = tf.Variable(1, dtype=tf.float32, trainable=False)
 				p_clip = tf.clip_by_value(p, clip_value_min=clip_val_min, clip_value_max=clip_val_max)
 				# H.shape = [1, output_dim]
 				H = -1 * tf.reduce_sum(tf.multiply(p_clip, tf.log(p_clip, name='log_p')), axis=0, keep_dims=True, name='Hj')
 				self.loss = tf.reduce_sum(tf.multiply(H, q_sum/N), name='weighted_entropy')
 			with tf.variable_scope('opt') as scope:
-				# TODO: pass learning rate
 				self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss, global_step=global_step)
 
 		self.built = True
@@ -96,7 +98,7 @@ class Perceptron(Classifier):
 		with self.session as sess:
 			sess.run(tf.global_variables_initializer())
 			df = pd.read_csv(balanced_file)
-			lr = np.float32(self.batch_size)/len(df)
+			lr = np.float32(self.batch_size)/(len(df)*10.)
 			for e in range(self.epochs):
 				epoch_loss = 0.0
 				num_samples = 0
@@ -134,6 +136,7 @@ class Perceptron(Classifier):
 						can be accessed by df.ix[self.node_id]
 		child_id:	List of child node IDs used to update the index
 		"""
+		logging.debug('Node {} : Run predict'.format(node_id))
 		x = df.ix[node_id, (df.columns!='predicted_label') & (df.columns!='label')].as_matrix()
 		Wx = x.dot(params['W'])
 		Wxb = Wx + params['b']

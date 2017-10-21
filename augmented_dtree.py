@@ -99,6 +99,9 @@ class DTree(object):
 
 			if self.get_impurity_drop(self.nodes[curr_node.parent_id], curr_node) < self.impurity_drop_threshold :
 				curr_node.child_id = []
+				curr_node.num_child = 0
+				curr_node.is_decision_node = True
+				curr_node.label = curr_node.get_label()
 				logging.debug('Stop growth at node {} due to low impurity drop rate'.format(node_to_process))
 				node_to_process += 1
 				continue
@@ -184,6 +187,7 @@ class DTree(object):
 		df['predicted_label'] = [0 for _ in range(len(df))]
 		for node in self.nodes:
 			node.predict(df)
+		df = df[['label','predicted_label']]
 		df.to_csv('output.csv',index=False)
 
 

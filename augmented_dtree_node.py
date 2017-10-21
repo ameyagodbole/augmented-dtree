@@ -106,7 +106,11 @@ class DTNode(object):
 				NOTE: decision will be placed in predicted_label column
 		"""
 		if self.is_decision_node:
-			df.ix[self.node_id,'predicted_label'] = self.label 
+			try:
+				l = len(df.ix[self.node_id,'predicted_label'])
+			except KeyError:
+				return
+			df.ix[self.node_id,'predicted_label'] = [self.label for _ in range(l)] 
 		else:
 			self.decision_maker.predict(self.node_id, self.params, df, self.child_id)
 

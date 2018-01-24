@@ -9,7 +9,7 @@ class DTNode(object):
 	DTNode class to define DTree decisions
 	"""
 	
-	def __init__(self, node_id, parent_id, node_depth, num_classes, num_child,
+	def __init__(self, node_id, parent_id, node_depth, num_classes, num_child, data_path = None,
 		data_file=None, balanced_file=None, count_threshold=None, purity_threshold=None):
 		"""
 		Arguments:
@@ -33,6 +33,7 @@ class DTNode(object):
 		self.num_child = num_child
 		self.child_id = []
 		self.data_file = data_file
+		self.data_path = data_path
 		self.balanced_file = balanced_file
 		self.decision_maker = None
 		self.count_threshold = count_threshold
@@ -68,13 +69,15 @@ class DTNode(object):
 		if self.is_label_node() or self.num_child==0:
 			if(self.num_child==0):
 				logging.debug('Set {} to label based on depth'.format(self.node_id))
+			if(self.num_child==1):
+				logging.debug('Set {} to label based on having only one child node'.format(self.node_id))
 			self.is_decision_node = True
 			self.label = self.get_label()
 			self.num_child = 0
 			self.child_id = []
 			return self.child_id
 		self.decision_maker.build()
-		self.params = self.decision_maker.train(self.data_file, self.balanced_file, self.child_id)
+		self.params = self.decision_maker.train(self.data_file, self.balanced_file, self.child_id, self.data_path)
 		return self.child_id
 
 	def save_node_params(self, savepath):
@@ -105,26 +108,38 @@ class DTNode(object):
 					can be accessed by df.ix[self.node_id]
 				NOTE: decision will be placed in predicted_label column
 		"""
-		if self.is_decision_node:
+		if self.is_decision_node or len(self.child_id)==0:
+			#df.ix[self.node_id,'predicted_label'] = self.label 
+			
 			try:
-				l = len(df.ix[self.node_id,'predicted_label'])
+ 				# df.ix[self.node_id,'predicted_label']
+ 				df.loc[self.node_id,'predicted_label'].shape 
 			except KeyError:
+				print('no data for this node_id')
 				return
-			df.ix[self.node_id,'predicted_label'] = [self.label for _ in range(l)] 
+			df.loc[self.node_id,'predicted_label'] = self.label		 
 		else:
-			self.decision_maker.predict(self.node_id, self.params, df, self.child_id)
+			try:
+				# df.ix[self.node_id,'predicted_label']
+				self.decision_maker.predict(self.node_id, self.params, df, self.child_id)
+			except KeyError:
+				print('no data for this node_id')
+				return
+			# self.decision_maker.predict(self.node_id, self.params, df, self.child_id)
 
 	def is_label_node(self):
 		"""
 		Check if current node is label node
+
 		"""
-		return self.decision_maker.is_label(self.data_file, self.count_threshold, self.purity_threshold) 
+		
+		return self.decision_maker.is_label(self.data_file, self.count_threshold, self.purity_threshold, self.data_path) 
 
 	def get_label(self):
 		"""
 		Set label for decision node
 		"""
-		return self.decision_maker.max_freq(self.data_file)
+		return self.decision_maker.max_freq(self.data_file, self.data_path)
 	
 	def get_impurity(self):
 		"""

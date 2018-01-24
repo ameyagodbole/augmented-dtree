@@ -5,6 +5,11 @@ import scipy.cluster
 import scipy.stats
 import pandas as pd
 import time
+from imblearn.over_sampling import SMOTE
+from imblearn.under_sampling import TomekLinks,EditedNearestNeighbours
+from imblearn.combine import SMOTEENN
+from sklearn.neighbors import NearestNeighbors
+
 '''
 def timing(f):
 	def wrap(*args):
@@ -39,12 +44,14 @@ class DataBalance(object):
 		"""
 		
 		df = self.data
-		thresh = 10
+		thresh = 100
 		for i in range(self.num_classes):
 			data = df.loc[df['label'] == i, self.features].as_matrix()
-			if len(data)>0:	
-				clusters = hcluster.fclusterdata(data, thresh, criterion='maxclust', method='average')
+			if len(data)>2:	
+				clusters = hcluster.fclusterdata(data, thresh, criterion='distance', method='average')
 				df.loc[df['label']==i, 'cluster'] = clusters.astype(np.int32)
+			else:
+				df.loc[df['label']==i, 'cluster'] = 0
 	
 
 	def oversample(self, label, cluster, size):
@@ -71,6 +78,60 @@ class DataBalance(object):
 			b = np.asarray([[(1-f) for row in range(len(self.features))]for f in frac]) * np.array(a)
 			c = np.asarray([[f for row in range(len(self.features))] for f in frac])* np.asarray([mean for m in range(dfRandom.shape[0])])
 			newdata = b+c
+			newdata = newdata.tolist()
+			df2 = pd.DataFrame(newdata,columns=self.features)
+			df2['label'] = label
+			df2['cluster'] = cluster
+			df2['original'] = 0
+			'''
+
+			for k,r in dfRandom.iterrows():
+				a = r[self.features]
+				frac = np.random.random()
+				newdata = (1-frac) * np.array(a) + frac * mean
+				allnewdata.append(newdata.tolist() + [label,cluster,0])
+			df2 = pd.DataFrame(allnewdata,columns=self.features+['label','cluster','original'])
+			'''
+			#df = pd.concat([df,df2],ignore_index=False)
+			
+
+		return df2
+
+	def oversample_knn(self, label, cluster, size):
+		"""
+		Oversamples the cluster 'cluster' of class 'label' to the required size.
+		Arguments:
+		label:	Class to be oversampled
+		cluster:	Cluster of class to be oversampled
+		size: 	Required size to be sampled to
+		"""
+		df = self.data
+		dfTemp = df.loc[(df['label'] == label) & (df['cluster'] == cluster)]
+	
+		s = size - dfTemp.shape[0]
+		df2 = None
+
+		if( (s > 0) & ((dfTemp.shape[0]) > 0)):
+			dfRandom = dfTemp.sample(n = s, replace = True)
+			dataTemp = dfTemp[self.features].as_matrix()
+			mean = np.array(np.mean(dataTemp , axis = 0))
+			allnewdata = []
+			if dataTemp.shape[0]>6:
+				nn = 5
+			elif dataTemp.shape[0]==1:
+				return None
+			else:
+				nn = dataTemp.shape[0]-1
+			nbrs = NearestNeighbors(n_neighbors=nn, algorithm='ball_tree').fit(dfTemp[self.features])
+			a = dfRandom[self.features]
+			#dfRandom = nbrs.sample(n = s, replace = True)
+			distances, indices = nbrs.kneighbors(a)
+			
+			#frac = [np.random.random() for i in range(dfRandom.shape[0])]
+			#b = np.asarray([[(1-f) for row in range(len(self.features))]for f in frac]) * np.array(a)
+			#c = np.asarray([[f for row in range(len(self.features))] for f in frac])* np.asarray([mean for m in range(dfRandom.shape[0])])
+			#newdata = b+c
+			newdata = np.asarray([np.mean([dataTemp[i] for i in indices[j]],axis = 0)for j in range(dfRandom.shape[0])])
 			newdata = newdata.tolist()
 			df2 = pd.DataFrame(newdata,columns=self.features)
 			df2['label'] = label
@@ -124,13 +185,23 @@ class DataBalance(object):
 
 		for i in range(self.num_classes):
 			dfTemp = df.loc[(df['label'] == i)]
+			
+			ratio = float(len(dfTemp))/len(df)
+			if ratio < 0.05:
+				continue
+			
+
 			num_clusters = (int(len(np.unique(dfTemp['cluster']))))
 			print('Balancing Class {}'.format(i))
 
 			for j in np.unique(dfTemp['cluster']):
-				df = pd.concat([df,oversample(i, j, int(np.ceil(float(self.size_class)/num_clusters)))],ignore_index=False)
-
-		#print(df.shape)
+				
+				lenj = dfTemp.loc[dfTemp['cluster'] == j].shape[0]
+				'''
+				if lenj/len(dfTemp)<0.05:
+					continue
+				'''
+				df = pd.concat([df,self.oversample_knn(i, j, int(np.ceil(float(self.size_class)/num_clusters)))],ignore_index=False)
 		return df
 
 
@@ -146,8 +217,78 @@ class DataBalance(object):
 		self.cluster()
 		dfBalanced = self.balance()
 		out_csv = dfBalanced[self.features+['label']]
+		"""==============================="""
+		out_temp = pd.DataFrame()
+		dropped = pd.DataFrame()
+		for c in np.unique(out_csv['label']):
+			if len(out_csv.loc[out_csv['label']==c])>6:
+				out_temp = pd.concat([out_temp,out_csv.loc[out_csv['label']==c]], ignore_index = True)
+			else:
+				dropped = pd.concat([dropped,out_csv.loc[out_csv['label']==c]], ignore_index = True)
+		print 'Original size:',len(self.data)
+		print 'Oversampled size:',len(out_csv)
+		X = out_temp.as_matrix(self.features)
+		y = np.ravel(out_temp.as_matrix(['label']))
+
+		#tl = TomekLinks(ratio='all',random_state=42,n_jobs=4)
+		#X_res, y_res = tl.fit_sample(X, y)
+		
+		if len(np.unique(y))>1:
+			#sm = SMOTE(ratio='all',n_jobs=4)
+			enn = EditedNearestNeighbours(ratio='all',kind_sel='mode',n_neighbors=5,random_state=42,n_jobs=4)
+			#smenn = SMOTEENN(ratio='all',smote=sm,enn=enn)
+			X_res, y_res = enn.fit_sample(X, y)
+
+			out_csv = pd.DataFrame(X_res, columns=self.features)
+			out_csv['label'] = y_res
+			out_csv = pd.concat([out_csv,dropped], ignore_index = True)
+		print 'Undersampled size:',len(out_csv)
+		"""==============================="""
 		out_csv.to_csv(out_file_name,index=False)
 
+	def data_balance_CBO_enn(self, out_file_name):
+		"""
+		Balances the data and saves it in a csv file.
+		Arguments:
+		name: 	name of csv file to save to
+		"""
+		self.load()
+		if self.data.empty:
+			return
+		self.cluster()
+		dfBalanced = self.balance()
+		out_csv = dfBalanced[self.features+['label']]
+		"""==============================="""
+		#out_csv = self.data
+		print 'Original size:',len(out_csv)
+		X = out_csv.as_matrix(self.features)
+		y = np.ravel(out_csv.as_matrix(['label']))
+		
+		enn = EditedNearestNeighbours(ratio='all',kind_sel='mode',n_neighbors=5,random_state=42,n_jobs=4)
+		X_res, y_res = enn.fit_sample(X, y)
+
+		out_csv = pd.DataFrame(X_res, columns=self.features)
+		out_csv['label'] = y_res
+		print 'Undersampled size:',len(out_csv)
+		"""==============================="""
+		out_csv.to_csv(out_file_name,index=False)
+
+	def data_balance_CBO(self, out_file_name):
+		"""
+		Balances the data and saves it in a csv file.
+		Arguments:
+		name: 	name of csv file to save to
+		"""
+		self.load()
+		if self.data.empty:
+			return
+		self.cluster()
+		dfBalanced = self.balance()
+		out_csv = dfBalanced[self.features+['label']]
+		"""==============================="""
+		print 'Undersampled size:',len(out_csv)
+		"""==============================="""
+		out_csv.to_csv(out_file_name,index=False)
 
 	def load(self):
 		"""
@@ -156,7 +297,6 @@ class DataBalance(object):
 		df = pd.read_csv(self.input_file)
 		self.features = [col for col in df.columns if col!='label']
 
-		df['cluster'] = np.nan	
-		df['original'] = 1
+		# df['cluster'] = np.nan	
+		# df['original'] = 1
 		self.data = df
-

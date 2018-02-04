@@ -141,7 +141,7 @@ class DataBalance(object):
 		name: 	name of csv file to save to
 		"""
 		self.load()
-		if self.data.empty:
+		if self.data.empty or len(self.data)<=1:
 			return
 		self.cluster()
 		dfBalanced = self.balance()

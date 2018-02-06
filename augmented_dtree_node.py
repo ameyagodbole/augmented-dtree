@@ -10,7 +10,7 @@ class DTNode(object):
 	"""
 	
 	def __init__(self, node_id, parent_id, node_depth, num_classes, num_child, working_dir_path = None,
-		data_file=None, balanced_file=None, count_threshold=None, purity_threshold=None):
+		data_file=None, balanced_file=None, count_threshold=0, purity_threshold=1.):
 		"""
 		Arguments:
 		node_id: Index of node in tree nodelist

@@ -9,19 +9,20 @@ class DTNode(object):
 	DTNode class to define DTree decisions
 	"""
 	
-	def __init__(self, node_id, parent_id, node_depth, num_classes, num_child,
+	def __init__(self, node_id, parent_id, node_depth, num_classes, num_child, working_dir_path = None,
 		data_file=None, balanced_file=None, count_threshold=None, purity_threshold=None):
 		"""
 		Arguments:
-		node_id:	Index of node in tree nodelist
-		parent_id:	Index of parent node in tree nodelist
+		node_id: Index of node in tree nodelist
+		parent_id: Index of parent node in tree nodelist
 		node_depth: Depth of node in decision tree
-		num_classes:	Number of classes in data
-		num_child:	Number of child nodes of node
-		data_file:	Original data
-		balanced_file:	Balanced data
-		count_threshold:	Maximum samples needed to consider purity-based stoppping of tree growth
-		purity_threshold:	Percentage of most common class for purity-based stoppping of tree growth
+		num_classes: Number of classes in data
+		num_child: Number of child nodes of node
+		working_dir_path: Working directory used to store intermediate files and results
+		data_file: Original data
+		balanced_file: Balanced data
+		count_threshold: Minimum number of samples needed, otherwise node is marked as leaf
+		purity_threshold: Percentage of most common class for purity-based stoppping of tree growth
 		"""
 		super(DTNode, self).__init__()
 		self.node_id = node_id
@@ -33,6 +34,7 @@ class DTNode(object):
 		self.num_child = num_child
 		self.child_id = []
 		self.data_file = data_file
+		self.working_dir_path = working_dir_path
 		self.balanced_file = balanced_file
 		self.decision_maker = None
 		self.count_threshold = count_threshold
@@ -65,16 +67,18 @@ class DTNode(object):
 		"""
 		Train on data and save params in Node
 		"""
-		if self.is_label_node() or self.num_child==0:
+		if self.is_label_node() or self.num_child==0 or self.num_child==1:
 			if(self.num_child==0):
 				logging.debug('Set {} to label based on depth'.format(self.node_id))
+			if(self.num_child==1):
+				logging.debug('Set {} to label based on having only one child node'.format(self.node_id))
 			self.is_decision_node = True
 			self.label = self.get_label()
 			self.num_child = 0
 			self.child_id = []
 			return self.child_id
 		self.decision_maker.build()
-		self.params = self.decision_maker.train(self.data_file, self.balanced_file, self.child_id)
+		self.params = self.decision_maker.train(self.data_file, self.balanced_file, self.child_id, self.working_dir_path)
 		return self.child_id
 
 	def save_node_params(self, savepath):
@@ -99,32 +103,42 @@ class DTNode(object):
 		"""
 		Predict on dataframe. If not a label node, returns relevant child node id
 		Arguments:
-		df:		DataFrame of test samples.
+		df: DataFrame of test samples.
 				NOTE: label column will be ignored. Assumes the indexing o dataframe
 					is done using the assigned node i.e. samples reaching current node
 					can be accessed by df.ix[self.node_id]
 				NOTE: decision will be placed in predicted_label column
 		"""
-		if self.is_decision_node:
+		if self.is_decision_node or len(self.child_id)==0:
+			#df.ix[self.node_id,'predicted_label'] = self.label 
+			
 			try:
-				l = len(df.ix[self.node_id,'predicted_label'])
+ 				# df.ix[self.node_id,'predicted_label']
+ 				df.loc[self.node_id,'predicted_label'].shape 
 			except KeyError:
+				logging.debug('no data for this node_id')
 				return
-			df.ix[self.node_id,'predicted_label'] = [self.label for _ in range(l)] 
+			df.loc[self.node_id,'predicted_label'] = self.label		 
 		else:
-			self.decision_maker.predict(self.node_id, self.params, df, self.child_id)
+			try:
+				# df.ix[self.node_id,'predicted_label']
+				self.decision_maker.predict(self.node_id, self.params, df, self.child_id)
+			except KeyError:
+				logging.debug('no data for this node_id')
+				return
+			# self.decision_maker.predict(self.node_id, self.params, df, self.child_id)
 
 	def is_label_node(self):
 		"""
 		Check if current node is label node
 		"""
-		return self.decision_maker.is_label(self.data_file, self.count_threshold, self.purity_threshold) 
+		return self.decision_maker.is_label(self.data_file, self.count_threshold, self.purity_threshold, self.working_dir_path) 
 
 	def get_label(self):
 		"""
 		Set label for decision node
 		"""
-		return self.decision_maker.max_freq(self.data_file)
+		return self.decision_maker.max_freq(self.data_file, self.working_dir_path)
 	
 	def get_impurity(self):
 		"""

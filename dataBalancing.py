@@ -42,10 +42,15 @@ class DataBalance(object):
 		thresh = 10
 		for i in range(self.num_classes):
 			data = df.loc[df['label'] == i, self.features].as_matrix()
-			if len(data)>0:	
+			# TODO: Find permanent fix for
+			# ValueError: The number of observations cannot be determined on an empty distance matrix
+			if len(data)>1:	
 				clusters = hcluster.fclusterdata(data, thresh, criterion='maxclust', method='average')
 				df.loc[df['label']==i, 'cluster'] = clusters.astype(np.int32)
-	
+			elif len(data) == 1:
+				df.loc[df['label']==i, 'cluster'] = 0
+			else:
+				pass
 
 	def oversample(self, label, cluster, size):
 		"""
@@ -57,7 +62,11 @@ class DataBalance(object):
 		"""
 		df = self.data
 		dfTemp = df.loc[(df['label'] == label) & (df['cluster'] == cluster)]
-	
+
+		# TODO: Find permanent fix
+		if len(dfTemp) <= 1:
+			return pd.DataFrame(columns=df.columns)
+
 		s = size - dfTemp.shape[0]
 		df2 = None
 

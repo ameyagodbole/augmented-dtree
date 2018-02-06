@@ -160,6 +160,7 @@ class DTree(object):
 			node_info['node_depth'] = i.node_depth
 			node_info['is_decision_node'] = i.is_decision_node
 			node_info['label'] = i.label
+			node_info['label_type'] = i.label_type
 			node_info['impurity'] = i.get_impurity()
 			structure[i.node_id] = node_info
 		logging.debug('Saving to {}'.format(model_save_file))
@@ -218,7 +219,7 @@ class DTree(object):
 
 		# Sleight of hand to remove extension from output_file
 		f = open(os.path.join(working_dir_path,'accuracy_{}.txt'.format('.'.join(output_file.split('.')[:-1]))), 'w')
-		f.write("Accuracy: {}".format(acc))
+		f.write("Accuracy: {}\n".format(acc))
 		f.write("Number of nodes: {}".format(len(self.nodes)))
 		f.close()
 

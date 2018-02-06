@@ -182,17 +182,20 @@ class Perceptron(Classifier):
 		df = pd.read_csv(data_file)
 		if len(df) < count_threshold:
 			logging.debug('Decide label node based on count_threshold')
-			return True
+			return True, 'count_threshold'
 		# counts = np.asarray([len(df[df['label']==c]) for c in range(self.num_classes)]).astype(np.float32)
 		counts = Counter(df['label'])
 		if np.float(counts.most_common(1)[0][1])/len(df) > purity_threshold:
 			if len(counts) <= 1:
+				# Only class in data "purity_threshold I"
 				logging.debug('Decide label node based on purity')
-				return True
-			elif counts.most_common(2)[1][1] < 50:
+				return True, 'purity_threshold I'
+			# TODO: Maybe remove
+			elif counts.most_common(2)[1][1] < len(df):
+				# Majority class in data "purity_threshold II"
 				logging.debug('Decide label node based on purity')
-				return True
-		return False
+				return True, 'purity_threshold II'
+		return False, ''
 
 	def max_freq(self, data_file, data_path):
 		"""

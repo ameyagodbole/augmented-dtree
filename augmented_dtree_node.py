@@ -10,7 +10,7 @@ class DTNode(object):
 	"""
 	
 	def __init__(self, node_id, parent_id, node_depth, num_classes, num_child, working_dir_path = None,
-		data_file=None, balanced_file=None, count_threshold=None, purity_threshold=None):
+		data_file=None, balanced_file=None, count_threshold=0, purity_threshold=1.):
 		"""
 		Arguments:
 		node_id: Index of node in tree nodelist
@@ -30,6 +30,7 @@ class DTNode(object):
 		self.node_depth = node_depth
 		self.is_decision_node = False
 		self.label = None
+		self.label_type = ''
 		self.num_classes = num_classes
 		self.num_child = num_child
 		self.child_id = []
@@ -72,7 +73,6 @@ class DTNode(object):
 				logging.debug('Set {} to label based on depth'.format(self.node_id))
 			if(self.num_child==1):
 				logging.debug('Set {} to label based on having only one child node'.format(self.node_id))
-			self.is_decision_node = True
 			self.label = self.get_label()
 			self.num_child = 0
 			self.child_id = []
@@ -132,7 +132,8 @@ class DTNode(object):
 		"""
 		Check if current node is label node
 		"""
-		return self.decision_maker.is_label(self.data_file, self.count_threshold, self.purity_threshold, self.working_dir_path) 
+		self.is_decision_node, self.label_type = self.decision_maker.is_label(self.data_file, self.count_threshold, self.purity_threshold, self.working_dir_path) 
+		return self.is_decision_node
 
 	def get_label(self):
 		"""

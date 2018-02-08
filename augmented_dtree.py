@@ -15,7 +15,7 @@ class DTree(object):
 	"""
 	
 	def __init__(self, num_classes, num_child, max_depth, data_type, data_dimension, data_balance, decision_type,
-	 count_threshold, purity_threshold, impurity_drop_threshold, verbosity=2):
+	 purity_threshold=1., count_threshold=0, impurity_drop_threshold=None, verbosity=2):
 		"""
 		Arguments:
 		num_classes: Number of classes in data
@@ -25,9 +25,9 @@ class DTree(object):
 		data_dimension:	Number of features in data; int for numeric , tuple of ints for image
 		data_balance: Bool (whether to use data_balancing)
 		decision_type: Classifier to be used
-		count_threshold: Minimum number of samples needed, otherwise node is marked as leaf
 		purity_threshold:	Percentage of most common class for purity-based stoppping of tree growth
-		impurity_drop_threshold: [currently ignored] Minimum drop needed for growth of branch
+		count_threshold: Minimum number of samples needed, otherwise node is marked as leaf
+		impurity_drop_threshold: Minimum drop needed for growth of branch
 		verbosity:	0-ERROR 1-INFO 2-DEBUG
 		"""
 		super(DTree, self).__init__()
@@ -118,14 +118,15 @@ class DTree(object):
 				node_to_process += 1
 				continue
 
-			# if self.get_impurity_drop(self.nodes[curr_node.parent_id], curr_node) < self.impurity_drop_threshold :
-			# 	curr_node.child_id = []
-			# 	curr_node.num_child = 0
-			# 	curr_node.is_decision_node = True
-			# 	curr_node.label = curr_node.get_label()
-			# 	logging.debug('Stop growth at node {} due to low impurity drop rate'.format(node_to_process))
-			# 	node_to_process += 1
-			# 	continue
+			if self.impurity_drop_threshold is not None:
+				if self.get_impurity_drop(self.nodes[curr_node.parent_id], curr_node) < self.impurity_drop_threshold :
+					curr_node.child_id = []
+					curr_node.num_child = 0
+					curr_node.is_decision_node = True
+					curr_node.label = curr_node.get_label()
+					logging.debug('Stop growth at node {} due to low impurity drop rate'.format(node_to_process))
+					node_to_process += 1
+					continue
 			
 			for i in child_list:
 				# stop tree growth at max_depth
@@ -159,6 +160,7 @@ class DTree(object):
 			node_info['node_depth'] = i.node_depth
 			node_info['is_decision_node'] = i.is_decision_node
 			node_info['label'] = i.label
+			node_info['label_type'] = i.label_type
 			node_info['impurity'] = i.get_impurity()
 			structure[i.node_id] = node_info
 		logging.debug('Saving to {}'.format(model_save_file))
@@ -217,7 +219,7 @@ class DTree(object):
 
 		# Sleight of hand to remove extension from output_file
 		f = open(os.path.join(working_dir_path,'accuracy_{}.txt'.format('.'.join(output_file.split('.')[:-1]))), 'w')
-		f.write("Accuracy: {}".format(acc))
+		f.write("Accuracy: {}\n".format(acc))
 		f.write("Number of nodes: {}".format(len(self.nodes)))
 		f.close()
 

@@ -4,6 +4,8 @@ import scipy.cluster.hierarchy as hcluster
 import scipy.cluster
 import scipy.stats
 import pandas as pd
+from sklearn.cluster import KMeans
+
 import time
 '''
 def timing(f):
@@ -39,18 +41,51 @@ class DataBalance(object):
 		"""
 		
 		df = self.data
-		thresh = 10
+		thresh = 100
 		for i in range(self.num_classes):
 			data = df.loc[df['label'] == i, self.features].as_matrix()
-			# TODO: Find permanent fix for
-			# ValueError: The number of observations cannot be determined on an empty distance matrix
-			if len(data)>1:	
-				clusters = hcluster.fclusterdata(data, thresh, criterion='maxclust', method='average')
+			# if len(data)>2:	
+			# 	clusters = hcluster.fclusterdata(data, thresh, criterion='distance', method='average')
+			# 	df.loc[df['label']==i, 'cluster'] = clusters.astype(np.int32)
+			# else:
+			# 	df.loc[df['label']==i, 'cluster'] = 0
+			if len(data)>5:
+				kmeans = KMeans(n_clusters=int(0.2*len(data)), random_state=0).fit(data)
+				clusters = kmeans.labels_
+				#clusters = hcluster.fclusterdata(data, thresh, criterion='distance', method='average')
+				# print(clusters)
 				df.loc[df['label']==i, 'cluster'] = clusters.astype(np.int32)
-			elif len(data) == 1:
-				df.loc[df['label']==i, 'cluster'] = 0
 			else:
-				pass
+				df.loc[df['label']==i, 'cluster'] = 0
+				
+	def cluster_hybrid(self):
+		"""
+		Clusters the data of each class.
+		"""
+		
+		df = self.data
+		thresh = 1
+		minority = []
+		for i in range(self.num_classes):
+			data = df.loc[df['label'] == i, self.features].as_matrix()
+			try:
+				if len(data)>0.05*len(df):	
+					if len(data)>5:
+						kmeans = KMeans(n_clusters=int(0.2*len(data)), random_state=0).fit(data)
+						clusters = kmeans.labels_
+						#clusters = hcluster.fclusterdata(data, thresh, criterion='distance', method='average')
+						# print(clusters)
+						df.loc[df['label']==i, 'cluster'] = clusters.astype(np.int32)
+					else:
+						df.loc[df['label']==i, 'cluster'] = 0
+				else:
+					df.loc[df['label']==i, 'cluster'] = -1
+					minority.append(i)
+			except ValueError:
+				continue
+
+		return minority
+	
 
 	def oversample(self, label, cluster, size):
 		"""
@@ -62,11 +97,7 @@ class DataBalance(object):
 		"""
 		df = self.data
 		dfTemp = df.loc[(df['label'] == label) & (df['cluster'] == cluster)]
-
-		# TODO: Find permanent fix
-		if len(dfTemp) <= 1:
-			return pd.DataFrame(columns=df.columns)
-
+	
 		s = size - dfTemp.shape[0]
 		df2 = None
 
@@ -115,6 +146,7 @@ class DataBalance(object):
 
 		clusterFreq = []
 		for i in np.unique(dfTemp['cluster']):
+			#print(i)
 			clusterFreq.append(len(dfTemp.loc[dfTemp['cluster'] == i]))
 
 		maxCluster = max(clusterFreq)
@@ -133,13 +165,55 @@ class DataBalance(object):
 
 		for i in range(self.num_classes):
 			dfTemp = df.loc[(df['label'] == i)]
+			
+			ratio = len(dfTemp)/len(df)
+			if ratio < 0.01:
+				continue
+			
+
 			num_clusters = (int(len(np.unique(dfTemp['cluster']))))
-			print('Balancing Class {}'.format(i))
+			logging.debug('Balancing Class {}'.format(i))
 
 			for j in np.unique(dfTemp['cluster']):
+				
+				lenj = dfTemp.loc[dfTemp['cluster'] == j].shape[0]
+				'''
+				if lenj/len(dfTemp)<0.05:
+					continue
+				'''
 				df = pd.concat([df,oversample(i, j, int(np.ceil(float(self.size_class)/num_clusters)))],ignore_index=False)
+		return df
+	def balance_hybrid(self,minority):
+		"""
+		Increases the size of every class to that of the balanced majority class
+		"""
+		oversample = self.oversample
+		df = self.data
+		self.get_params()
 
-		#print(df.shape)
+		for i in range(self.num_classes):
+			if i in minority:
+				df_drop = df[ df['label'] ==i ]
+				df = df.drop(df_drop.index, axis=0)
+				continue
+			dfTemp = df.loc[(df['label'] == i)]
+			
+			ratio = float(len(dfTemp))/len(df)
+			if ratio < 0.01:
+				continue
+			
+
+			num_clusters = (int(len(np.unique(dfTemp['cluster']))))
+			logging.debug('Balancing Class {}'.format(i))
+
+			for j in np.unique(dfTemp['cluster']):
+				
+				lenj = dfTemp.loc[dfTemp['cluster'] == j].shape[0]
+				'''
+				if lenj/len(dfTemp)<0.05:
+					continue
+				'''
+				df = pd.concat([df,self.oversample(i, j, int(np.ceil(float(self.size_class)/num_clusters)))],ignore_index=False)
 		return df
 
 
@@ -150,12 +224,27 @@ class DataBalance(object):
 		name: 	name of csv file to save to
 		"""
 		self.load()
-		if self.data.empty or len(self.data)<=1:
+		if self.data.empty:
 			return
 		self.cluster()
 		dfBalanced = self.balance()
 		out_csv = dfBalanced[self.features+['label']]
 		out_csv.to_csv(out_file_name,index=False)
+
+	def data_balance_hybrid(self, out_file_name):
+		"""
+		Balances the data and saves it in a csv file.
+		Arguments:
+		name: 	name of csv file to save to
+		"""
+		self.load()
+		if self.data.empty:
+			return
+		minority = self.cluster_hybrid()
+		dfBalanced = self.balance_hybrid(minority)
+		out_csv = dfBalanced[self.features+['label']]
+		out_csv.to_csv(out_file_name,index=False)
+		return minority
 
 
 	def load(self):
@@ -168,4 +257,3 @@ class DataBalance(object):
 		df['cluster'] = np.nan	
 		df['original'] = 1
 		self.data = df
-

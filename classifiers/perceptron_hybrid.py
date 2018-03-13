@@ -4,13 +4,16 @@ import numpy as np
 import pandas as pd
 import logging
 from classifiers.classifier import Classifier
+from dataBalancing import DataBalance
+
 import time
-import scipy.cluster
-from sklearn.cluster import KMeans
 import pickle
+from scipy.spatial.distance import cdist
+from collections import Counter
+from sklearn.cluster import KMeans
+import math
 
-
-class Perceptron(Classifier):
+class Perceptron_hybrid(Classifier):
 	"""Implement a single layer Perceptron"""
 
 	def __init__(self, input_dim, output_dim, num_classes, epochs, batch_size, node_id, data_balance):
@@ -22,7 +25,7 @@ class Perceptron(Classifier):
 		epochs:		Number of training epochs
 		batch_size:	Samples per batch (training as well as prediction)
 		"""
-		super(Perceptron, self).__init__()
+		super(Perceptron_hybrid, self).__init__()
 		self.input_dim = input_dim
 		self.output_dim = output_dim
 		self.num_classes = num_classes
@@ -32,11 +35,11 @@ class Perceptron(Classifier):
 		self.built = False
 		self.graph = None
 		self.score = 0.0
-
+		self.data_balance = data_balance
+		self.features = None
 		self.centers = []
 		self.variance = []
-		self.class_num= []
-
+		self.class_num = []
 	def build(self):
 		"""
 		Build classifier graph
@@ -89,12 +92,117 @@ class Perceptron(Classifier):
 			logging.error("Perceptron: train called before build")
 			raise AssertionError("Perceptron: train called before build")
 		params = {}
-		if self.node_id == 0:
-				df = pd.read_csv(os.path.join(data_path, balanced_file))
+		minority = []
+		data_loc = os.path.join(data_path, 'perceptron_tree_hybrid','data',data_file)
+		base = os.path.split(data_loc)[0]
+		if self.data_balance:
+			if self.node_id!=0:
+				if not os.path.isfile(os.path.join(base,'data_{}.csv'.format(self.node_id))):
+					logging.debug('No file to balance (data_{}.csv)'.format(self.node_id))
+				else:
+					logging.debug('Balance file data_{}.csv'.format(self.node_id))
+					db = DataBalance(os.path.join(base,'data_{}.csv'.format(self.node_id)) , self.num_classes)
+					minority = db.data_balance_hybrid(os.path.join(base,'b_data_{}.csv'.format(self.node_id)))
+			else:
+				if not os.path.isfile(os.path.join(data_path,data_file)):
+					logging.debug('No file to balance (data_{}.csv)'.format(self.node_id))
+				else:
+					logging.debug('Balance file data_{}.csv'.format(self.node_id))
+					db = DataBalance(os.path.join(data_path,data_file) , self.num_classes)
+					minority = db.data_balance_hybrid(os.path.join(base,'b_data_{}.csv'.format(self.node_id)))
 		else:
-			df = pd.read_csv(balanced_file)
+			if self.node_id!=0:
+				db = DataBalance(os.path.join(base,'data_{}.csv'.format(self.node_id)) , self.num_classes)
+				db.load()
+			else:
+				db = DataBalance(os.path.join(data_path,data_file) , self.num_classes)
+				db.load()
+
+			if db.data.empty:
+				return
+			minority = db.cluster_hybrid()
+		
+		if self.node_id==0:
+			balance_file = os.path.join(data_path,data_file) 
+			data_original = os.path.join(data_path,data_file) 
+		else:
+			balance_file = os.path.join(base,'b_data_{}.csv'.format(self.node_id)) if self.data_balance else os.path.join(base,'data_{}.csv'.format(self.node_id))
+			data_original = os.path.join(base,'data_{}.csv'.format(self.node_id))
+		df = pd.read_csv( balance_file)
+		df_org = pd.read_csv(data_original)
+		self.features = [col for col in df_org.columns if col!='label']
+		# if df_org.shape[0]>6:
+		# 		nn = 5
+		# 	elif df_org[0]==1:
+		# 		return None
+		# 	else:
+		# 		nn = df_org.shape[0]-1
+		# 	nbrs = NearestNeighbors(n_neighbors=nn, algorithm='ball_tree').fit(df_org[self.features])
+		try:
+			
+			for i in minority:
+				kmeans = None
+				data = df_org.loc[df_org['label'] == i, self.features].as_matrix()
+				if len(data)>4:
+					kmeans = KMeans(n_clusters=int(0.3*len(data)), random_state=0).fit(data)
+				elif len(data)>1:
+					kmeans = KMeans(n_clusters=2, random_state=0).fit(data)
+				if len(data)>1:
+					centers =  kmeans.cluster_centers_
+					var = kmeans.inertia_
+
+					for j in range(len(centers)):
+						df_other_class = df_org.loc[df_org['label'] != i, self.features].as_matrix()
+						dist = kmeans.transform(df_other_class)
+						dist = dist[dist[:,j] < math.sqrt(var)]
+						if len(dist)<0.3*len(data):
+							self.centers.append(centers[j])
+							self.variance.append(var)
+							self.class_num.append(i)
+		except TypeError:
+			pass
+		data_loc = os.path.join(data_path, 'perceptron_tree_hybrid','data','{}_node_{}_'.format(self.data_balance, self.node_id) )
+		with open(data_loc + 'centers.pkl' , 'wb') as f:
+			pickle.dump(self.centers, f)
+
+		with open(data_loc + 'variance.pkl', 'wb') as f:
+			pickle.dump(self.variance, f)
+
+		with open(data_loc + 'class_num.pkl', 'wb') as f:
+			pickle.dump(self.class_num, f)
+
+		for i in range(self.num_classes):
+			if i in minority:
+				#print('df lenght: {}'.format(len(df)))
+				#print('number of rows deleted: {}'.format(len(df.loc[df['label'] == i])))
+				df_drop = df[ df['label'] ==i ]
+				df = df.drop(df_drop.index, axis=0)
+				#print('df lenght: {}'.format(len(df)))
+		if self.node_id!=0:
+			df.to_csv(balance_file,index=False)
+			
+		if self.node_id!=0:
+
+			df = pd.read_csv(data_original)
+			for i in range(self.num_classes):
+				if i in minority:
+					#print('df lenght: {}'.format(len(df)))
+					#print('number of rows deleted: {}'.format(len(df.loc[df['label'] == i])))
+					df_drop = df[ df['label'] ==i ]
+					df = df.drop(df_drop.index, axis=0)
+					#print('df lenght: {}'.format(len(df)))
+			if len(df)>0:
+				df.to_csv(data_original,index=False)
+
+		df = pd.read_csv(balance_file)
+
+		if len(df)==0:
+			df = pd.read_csv(data_original)
+
 		lr = np.float32(self.batch_size)/len(df)
 		all_ok = False
+
+
 		while not all_ok:
 			with tf.Session(graph = self.graph) as sess:
 				sess.run(tf.global_variables_initializer())
@@ -144,7 +252,7 @@ class Perceptron(Classifier):
 				if self.node_id == 0:
 					data_loc = os.path.join(data_path, data_file)
 				else:
-					data_loc = os.path.join(data_path,'perceptron_tree','data',data_file)
+					data_loc = os.path.join(data_path,'perceptron_tree_hybrid','data',data_file)
 				dfo = pd.read_csv(data_loc)
 				for batch in self.batch_generator(dfo, shuffle=False):
 					pred = sess.run(self.q, feed_dict={self.data: batch[0], self.label:batch[1]})
@@ -181,6 +289,27 @@ class Perceptron(Classifier):
 		idx = np.where(as_list==node_id)[0]
 		as_list[idx] = output
 		df.index = as_list
+		data_loc = os.path.join(data_path, 'perceptron_tree_hybrid','data','{}_node_{}_'.format(self.data_balance, self.node_id) )
+		logging.debug('loading extreme minority model')
+		try:
+			with open (data_loc+ 'centers.pkl', 'rb') as fp:
+				self.centers = pickle.load(fp)
+			with open (data_loc+ 'variance.pkl', 'rb') as fp:
+				self.variance = pickle.load(fp)
+			with open (data_loc+ 'class_num.pkl', 'rb') as fp:
+				self.class_num = pickle.load(fp)
+
+			print(len(self.centers))
+			X = df.loc[node_id, (df.columns!='predicted_label') & (df.columns!='label')]
+			d = cdist(X.toarray(),centers)
+			l = np.where(d<math.sqrt(self.variance[0])/2)
+			logging.debug(len(l))
+			for loc in l:
+				df.loc[self.node_id,'predicted_label'][loc[1]] = class_num[loc[0]]
+				logging.debug(class_num[loc[0]])
+				df.loc[self.node_id][loc[0]].index = self.node_id
+		except IOError:
+			pass
 
 	def is_label(self, data_file, count_threshold, purity_threshold, data_path):
 		"""
@@ -193,17 +322,15 @@ class Perceptron(Classifier):
 		if self.node_id == 0:
 			data_loc = os.path.join(data_path, data_file)
 		else:
-			data_loc = os.path.join(data_path,'perceptron_tree','data',data_file)
+			data_loc = os.path.join(data_path,'perceptron_tree_hybrid','data',data_file)
 
 		df = pd.read_csv(data_loc)
 		if len(df) < count_threshold:
 			logging.debug('Decide label node based on count_threshold')
-			self.form_clusters(df, data_path)
 			return True
 		counts = np.asarray([len(df[df['label']==c]) for c in range(self.num_classes)]).astype(np.float32)
 		if np.float(np.max(counts))/len(df) > purity_threshold:
 			logging.debug('Decide label node based on purity')
-			self.form_clusters(df, data_path)
 			return True
 		return False
 
@@ -216,7 +343,7 @@ class Perceptron(Classifier):
 		if self.node_id == 0:
 			data_loc = os.path.join(data_path, data_file)
 		else:
-			data_loc = os.path.join(data_path,'perceptron_tree','data',data_file)
+			data_loc = os.path.join(data_path,'perceptron_tree_hybrid','data',data_file)
 
 		df = pd.read_csv(data_loc)
 		counts = np.asarray([len(df[df['label']==c]) for c in range(self.num_classes)])
@@ -256,12 +383,14 @@ class Perceptron(Classifier):
 		if self.node_id == 0:
 			data_loc = os.path.join(data_path, data_file)
 		else:
-			data_loc = os.path.join(data_path,'perceptron_tree','data',data_file)
+			data_loc = os.path.join(data_path,'perceptron_tree_hybrid','data',data_file)
 		#print(data_loc)
 		file = pd.read_csv(data_loc)
 		base = os.path.split(data_file)
 		#print(base[0])
 		pred_class = np.argmax(preds, axis=1)
+		#print('file length:{}'.format(len(file)))
+		#print('len of pred class: {}'.format(len(pred_class)))
 		if len(file)!=len(pred_class):
 			logging.debug("len(file):{} len(pred_class):{}".format(len(file),len(pred_class)))
 			logging.error("split_dataset : Array size mismatch")
@@ -275,7 +404,7 @@ class Perceptron(Classifier):
 			self.score += float(len(df))/len(file)*df_score
 			#print('saving')
 			#print(os.path.join(data_path, 'perceptron_tree','data','data_'+str(child_id[j])+'.csv'))
-			df.to_csv(os.path.join(data_path, 'perceptron_tree','data','data_'+str(child_id[j])+'.csv'),index=False)
+			df.to_csv(os.path.join(data_path, 'perceptron_tree_hybrid','data','data_'+str(child_id[j])+'.csv'),index=False)
 		logging.debug('Node impurity = {}'.format(self.score))
 
 	def get_impurity(self):
@@ -285,80 +414,10 @@ class Perceptron(Classifier):
 		if self.node_id == 0:	
 			data_loc = os.path.join(data_path, data_file)
 		else:
-			data_loc = os.path.join(data_path,'perceptron_tree','data',data_file)
+			data_loc = os.path.join(data_path,'perceptron_tree_hybrid','data',data_file)
 		df = pd.read_csv(data_loc)
 		impurity_score = 0.0		
 		for cl in np.unique(df['label']):
 			p = float(len(df.loc[df['label']==cl]))/len(df)	
 			impurity_score = impurity_score - p * np.log2(p)
 		return impurity_score
-
-	def form_clusters(self, df, data_path):
-		features = [col for col in df.columns if col!='label']
-
-		try:		
-			for i in range(self.num_classes):
-				kmeans = None
-				data = df.loc[df['label'] == i, features].as_matrix()
-				if len(data)>5:
-					kmeans = KMeans(n_clusters=int(0.2*len(data)), random_state=0).fit(data)
-				elif len(data)>1:
-					kmeans = KMeans(n_clusters=2, random_state=0).fit(data)
-				if len(data)>1:
-					centers =  kmeans.cluster_centers_
-					var = kmeans.inertia_
-					for j in range(len(centers)):
-						self.centers.append(centers[j])
-						self.variance.append(var)
-						self.class_num.append(i)
-		except TypeError:
-			pass
-
-		data_loc = os.path.join(data_path, 'perceptron_tree','data','node_{}_'.format(self.node_id) )
-		with open(data_loc + 'centers.pkl' , 'wb') as f:
-			pickle.dump(self.centers, f)
-
-		with open(data_loc + 'variance.pkl', 'wb') as f:
-			pickle.dump(self.variance, f)
-
-		with open(data_loc + 'class_num.pkl', 'wb') as f:
-			pickle.dump(self.class_num, f)
-
-	def form_clusters_impurity_criteria(self, data_path, data_file):
-
-		if self.node_id == 0:
-			data_loc = os.path.join(data_path, data_file)
-		else:
-			data_loc = os.path.join(data_path,'perceptron_tree','data',data_file)
-
-		df = pd.read_csv(data_loc)
-		features = [col for col in df.columns if col!='label']
-		try:		
-			for i in range(self.num_classes):
-				kmeans = None
-				data = df.loc[df['label'] == i, features].as_matrix()
-				if len(data)>5:
-					kmeans = KMeans(n_clusters=int(0.2*len(data)), random_state=0).fit(data)
-				elif len(data)>1:
-					kmeans = KMeans(n_clusters=2, random_state=0).fit(data)
-				if len(data)>1:
-					centers =  kmeans.cluster_centers_
-					var = kmeans.inertia_
-					for j in range(len(centers)):
-						self.centers.append(centers[j])
-						self.variance.append(var)
-						self.class_num.append(i)
-		except TypeError:
-			pass
-
-		data_loc = os.path.join(data_path, 'perceptron_tree','data','node_{}_'.format(self.node_id) )
-		with open(data_loc + 'centers.pkl' , 'wb') as f:
-			pickle.dump(self.centers, f)
-
-		with open(data_loc + 'variance.pkl', 'wb') as f:
-			pickle.dump(self.variance, f)
-
-		with open(data_loc + 'class_num.pkl', 'wb') as f:
-			pickle.dump(self.class_num, f)
-
-

@@ -2,24 +2,21 @@ import os
 import numpy as np
 import pandas as pd
 import logging
+import csv
+from csv import reader
 from classifiers.classifier import Classifier
-from collections import Counter
-
-# TODO: Review and streamline
 
 class C45(Classifier):
 	"""Implement a C4.5 classifier"""
 
-	def __init__(self, input_dim, output_dim, num_classes, epochs, batch_size, node_id, data_balance):
+	def __init__(self, input_dim, output_dim, num_classes, epochs, batch_size):
 		"""
 		Arguments:
-		input_dim: Dimension of input data
-		output_dim: Dimension of output labels (equal to number of child nodes)
+		input_dim:	Dimension of input data
+		output_dim:	Dimension of output labels (equal to number of child nodes)
 		num_classes: Number of classes in data		
-		epochs: Ignored
-		batch_size: Ignored
-		node_id: ID of node housing the decision maker 
-		data_balance: Ignored [balancing if any is done in the node]
+		epochs:		Ignored
+		batch_size:	Ignored
 		"""
 		super(C45, self).__init__()
 		self.input_dim = input_dim
@@ -30,7 +27,7 @@ class C45(Classifier):
 		self.score = None
 		self.impurity_drop = None
 		self.b_score = None
-		self.node_id = node_id
+
 		
 	def build(self):
 		pass
@@ -61,14 +58,18 @@ class C45(Classifier):
 		if index!='label':	
 			print(index)			
 			[self.eval_label_row(dataset, class_values, index, x) for x in a]
+		
 
-	def eval_label_row(self, dataset, class_values, index, value):		
+	def eval_label_row(self, dataset, class_values, index, value):
+		
 		groups = (dataset.loc[dataset[index]<value],dataset.loc[dataset[index]>=value])
 		impurity = self.impurity_index(groups, class_values)
 		if impurity < self.b_score:
 			self.b_score = impurity
 			self.index = index
 			self.value = value
+
+
 
 	def get_split(self, balanced_file):
 		"""
@@ -81,34 +82,47 @@ class C45(Classifier):
 		[self.eval_label_col(dataset, class_values, index) for index in dataset.columns]
 		print(self.value)
 		print(self.index)
+		
 
-	def split_dataset(self, data_file, child_id, data_path):
+
+	def split_dataset(self, data_file, child_id):
 		"""
 		Split dataset for child nodes
 		Arguments:
-		data_file: File containing the data in csv format. NOTE: pass original data only
-		preds: Decision maker predictions for each sample
-		child_id: List of child nodes (used in filename of split data)
+		data_file:	File containing the data in csv format. NOTE: pass original data only
+		preds:		Decision maker predictions for each sample
+		child_id:	List of child nodes (used in filename of split data)
 		"""
-		#base = os.path.split(data_file)
+		base = os.path.split(data_file)
 		dataset = pd.read_csv(data_file)
-		groups = (dataset.loc[dataset[self.index]<self.value],dataset.loc[dataset[self.index]>=self.value])
+		if np.sum([dataset[self.index]<self.val])==0:
+			group1 = pd.DataFrame()  
+		else:
+			group1 = dataset.loc[dataset[self.index]<self.value]
+
+		if np.sum([dataset[self.index]>=self.value])==0:
+			group2 = pd.DataFrame()  
+		else:
+			group2 =dataset.loc[dataset[self.index]>=self.value]
+
+		groups = (group1,group2)
 		class_values = np.unique(dataset['label'])
 		self.score = self.impurity_index(groups, class_values)
 		
 		for j in range(self.output_dim):
-			print(os.path.join(data_path, 'data', 'data_'+str(child_id[j])+'.csv'))
-			groups[j].to_csv(os.path.join(data_path,'data','data_'+str(child_id[j])+'.csv'),index=False)
+			groups[j].to_csv(os.path.join(base[0],'data_'+str(child_id[j])+'.csv'),index=False)
 
-	def train(self, data_file, balanced_file, child_id, data_path):	
+			
+
+	def train(self, data_file, balanced_file, child_id):		
 		self.get_split(balanced_file)
-		self.split_dataset(data_file, child_id, data_path)
+		self.split_dataset(data_file, child_id)
 		params = {}
 		params['index'] = self.index
 		params['value'] = self.value
 		return params
 
-	def is_label(self, data_file, count_threshold, purity_threshold, data_path):
+	def is_label(self, data_file, count_threshold, purity_threshold):
 		"""
 		Checks if the data should be split or declared a leaf node
 		Arguments:
@@ -119,21 +133,14 @@ class C45(Classifier):
 		df = pd.read_csv(data_file)
 		if len(df) < count_threshold:
 			logging.debug('Decide label node based on count_threshold')
-			return True, 'count_threshold'
-		counts = Counter(df['label'])
-		if np.float(counts.most_common(1)[0][1])/len(df) > purity_threshold:
-			if len(counts)<=1:
-				# Only class in data "purity_threshold I"
-				logging.debug('Decide label node based on purity')
-				return True, 'purity_threshold I'
-			# TODO: Maybe remove
-			elif counts.most_common(2)[1][1] < len(df):
-				# Majority class in data "purity_threshold II"
-				logging.debug('Decide label node based on purity')
-				return True, 'purity_threshold II'
-		return False, ''
+			return True
+		counts = np.asarray([len(df[df['label']==c]) for c in range(self.num_classes)]).astype(np.float32)
+		if np.float(np.max(counts))/len(df) > purity_threshold:
+			logging.debug('Decide label node based on purity')
+			return True
+		return False
 
-	def max_freq(self, data_file, data_path):
+	def max_freq(self, data_file):
 		"""
 		Get most frequent class
 		Arguments:
@@ -160,21 +167,18 @@ class C45(Classifier):
 
 		"""
 		print(node_id)
-		
+		if node_id==44:
+			return
 		cols = [col for col in df.columns if col not in ['predicted_label', 'label','assigned_node']]
-		x = df.loc[node_id, cols]
-		if len(x)==0:
-			return
+		x = df.ix[node_id, cols]
+		
 		preds = []
-
-		try:
-			for index, row in x.iterrows():
-				if row[params['index']] < params['value']:
-					preds.append(0)
-				else:
-					preds.append(1)
-		except AttributeError:
-			return
+		for index, row in x.iterrows():
+			if row[params['index']] < params['value']:
+				preds.append(0)
+			else:
+				preds.append(1)
+		
 		
 		output = np.asarray(child_id)[preds].tolist()
 

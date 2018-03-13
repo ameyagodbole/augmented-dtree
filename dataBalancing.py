@@ -1,38 +1,57 @@
-
 import numpy as np
+import logging
 import scipy.cluster.hierarchy as hcluster
 import scipy.cluster
 import scipy.stats
 import pandas as pd
+import time
+'''
+def timing(f):
+	def wrap(*args):
+		time1 = time.time()
+		ret = f(*args)
+		time2 = time.time()
+		print ('%s function took %0.3f ms' % (f.func_name, (time2-time1)*1000.0))
+		return ret
+	return wrap
+'''
 
 class DataBalance(object):
 	"""DataBalance class for data balancing"""
 	
-	def __init__(self, input_file):
+	def __init__(self, input_file, num_classes):
 		"""
 		Arguments:
 		input_file: File containing data to be balanced
 		"""
 		super(DataBalance, self).__init__()
 		self.input_file = input_file
-		self.data = null
+		self.data = None
 		self.classFreq = []
-		self.majClass = null
-		self.size_class = null
-
+		self.majClass = None
+		self.size_class = None
+		self.features = None
+		self.num_classes = num_classes
 
 	def cluster(self):
 		"""
 		Clusters the data of each class.
 		"""
-		thresh = 1
+		
 		df = self.data
-		for i in range(max(df['label'])+1):
+		thresh = 10
+		for i in range(self.num_classes):
+			data = df.loc[df['label'] == i, self.features].as_matrix()
+			# TODO: Find permanent fix for
+			# ValueError: The number of observations cannot be determined on an empty distance matrix
+			if len(data)>1:	
+				clusters = hcluster.fclusterdata(data, thresh, criterion='maxclust', method='average')
+				df.loc[df['label']==i, 'cluster'] = clusters.astype(np.int32)
+			elif len(data) == 1:
+				df.loc[df['label']==i, 'cluster'] = 0
+			else:
+				pass
 
-			data = np.array(df.loc[df['label'] == i, 'features'].tolist())		
-			clusters = hcluster.fclusterdata(data, thresh, criterion='distance',method='average')
-			df.loc[df['label']==i, 'cluster'] = clusters
-				
 	def oversample(self, label, cluster, size):
 		"""
 		Oversamples the cluster 'cluster' of class 'label' to the required size.
@@ -43,42 +62,64 @@ class DataBalance(object):
 		"""
 		df = self.data
 		dfTemp = df.loc[(df['label'] == label) & (df['cluster'] == cluster)]
-	
+
+		# TODO: Find permanent fix
+		if len(dfTemp) <= 1:
+			return pd.DataFrame(columns=df.columns)
+
 		s = size - dfTemp.shape[0]
+		df2 = None
 
 		if( (s > 0) & ((dfTemp.shape[0]) > 0)):
 			dfRandom = dfTemp.sample(n = s, replace = True)
-			dataTemp = np.array( dfTemp['features'].tolist())
-			mean = np.mean(dataTemp , axis = 0)
+			dataTemp = dfTemp[self.features].as_matrix()
+			mean = np.array(np.mean(dataTemp , axis = 0))
+			allnewdata = []
+			a = dfRandom[self.features]
+			frac = [np.random.random() for i in range(dfRandom.shape[0])]
+			b = np.asarray([[(1-f) for row in range(len(self.features))]for f in frac]) * np.array(a)
+			c = np.asarray([[f for row in range(len(self.features))] for f in frac])* np.asarray([mean for m in range(dfRandom.shape[0])])
+			newdata = b+c
+			newdata = newdata.tolist()
+			df2 = pd.DataFrame(newdata,columns=self.features)
+			df2['label'] = label
+			df2['cluster'] = cluster
+			df2['original'] = 0
+			'''
 
 			for k,r in dfRandom.iterrows():
-				a = r['features']
-				newdata = (np.array(a) + np.array(mean)) / 2
-				df2 = pd.DataFrame([[newdata,i,j,0]],columns=['features','label','cluster','original'])
-				df = pd.concat([df,df2])
+				a = r[self.features]
+				frac = np.random.random()
+				newdata = (1-frac) * np.array(a) + frac * mean
+				allnewdata.append(newdata.tolist() + [label,cluster,0])
+			df2 = pd.DataFrame(allnewdata,columns=self.features+['label','cluster','original'])
+			'''
+			#df = pd.concat([df,df2],ignore_index=False)
+			
 
-		return df
+		return df2
 
 	def get_params(self):
 		"""
 		Calculates parameters majClass, size_class
 		"""
 		df = self.data
-		
-		for i in range(max(df['label'])+1):
-			self.classFreq.append(df.loc[df['label'] == i].shape[0])
+
+		self.classFreq = []
+		for i in range(self.num_classes):
+			self.classFreq.append(len(df.loc[df['label'] == i]))
 
 		self.majClass = self.classFreq.index(max(self.classFreq))
 
-		dfTemp = df.loc[(df['label'] == self.majClass)]
+		dfTemp = df.loc[df['label'] == self.majClass]
 
 		clusterFreq = []
-		for i in range(int(max(dfTemp['cluster']))+1):
-			clusterFreq.append(dfTemp.loc[dfTemp['cluster'] == i].shape[0])
+		for i in np.unique(dfTemp['cluster']):
+			clusterFreq.append(len(dfTemp.loc[dfTemp['cluster'] == i]))
 
 		maxCluster = max(clusterFreq)
 
-		self.size_class = maxCluster * (int(max(dfTemp['cluster']))+1)
+		self.size_class = maxCluster * (int(len(np.unique(dfTemp['cluster']))))
 
 
 
@@ -86,16 +127,17 @@ class DataBalance(object):
 		"""
 		Increases the size of every class to that of the balanced majority class
 		"""
-		
+		oversample = self.oversample
 		df = self.data
 		self.get_params()
 
-		for i in range(max(df['label'])+1):
+		for i in range(self.num_classes):
 			dfTemp = df.loc[(df['label'] == i)]
-			num_clusters = (int(max(dfTemp['cluster']))+1)
+			num_clusters = (int(len(np.unique(dfTemp['cluster']))))
+			print('Balancing Class {}'.format(i))
 
-			for j in range(1, int(max(dfTemp['cluster']))+1):
-				df = oversample(df, i, j, self.size_class/num_clusters)
+			for j in np.unique(dfTemp['cluster']):
+				df = pd.concat([df,oversample(i, j, int(np.ceil(float(self.size_class)/num_clusters)))],ignore_index=False)
 
 		#print(df.shape)
 		return df
@@ -106,58 +148,24 @@ class DataBalance(object):
 		Balances the data and saves it in a csv file.
 		Arguments:
 		name: 	name of csv file to save to
-
 		"""
 		self.load()
+		if self.data.empty or len(self.data)<=1:
+			return
 		self.cluster()
 		dfBalanced = self.balance()
-		out_csv = dfBalanced[['features','label']]
-		out_csv.to_csv(out_file_name)
+		out_csv = dfBalanced[self.features+['label']]
+		out_csv.to_csv(out_file_name,index=False)
 
 
 	def load(self):
 		"""
 		Loads data from csv file to a dataframe
 		"""
-		df = pd.read_csv(self.input_file, names=['features', 'label'])
+		df = pd.read_csv(self.input_file)
+		self.features = [col for col in df.columns if col!='label']
+
 		df['cluster'] = np.nan	
 		df['original'] = 1
 		self.data = df
 
-"""
-def main():
-	numData=0
-	numFeat=0
-
-	with open("iristrain.txt") as f:
-	    content = f.readlines()
-
-	content = [x.strip() for x in content] 
-
-	content.pop(0)
-	content.pop(0)
-
-	data=[]
-	Y=[]
-	label=[]
-	cnt=0
-
-	for i in content:
-		cnt=cnt+1
-		if(cnt % 5 == 0):
-			data.append(Y[:])
-			label.append(int(i))
-			del Y[:]
-
-		else:
-			Y.append(float(i))
-
-	df = pd.DataFrame({'features':data, 'label':label})
-	df['cluster'] = np.nan	
-	df['original'] = 1
-
-	dataBalance(df, 'out.csv')
-
-if __name__ == "__main__":
-    main()
-"""

@@ -29,7 +29,8 @@ class Perceptron(Classifier):
 		self.node_id = node_id
 		self.built = False
 		self.graph = None
-		self.score = 0.0
+		self.impurity = None
+		self.score = None
 
 	def build(self):
 		"""
@@ -126,7 +127,7 @@ class Perceptron(Classifier):
 								continue
 							if curr_loss_drop < 0 or curr_loss_drop < 0.05*max_loss_drop:
 								patience += 1
-							if patience>=6:
+							if patience>=2:
 								logging.info("Stopping training after {} epochs due to saturation of perceptron".format(e+1))
 								break
 				if not all_ok:
@@ -159,7 +160,7 @@ class Perceptron(Classifier):
 		"""
 		if len(df)==0:
 			return
-		x = df.loc[node_id, (df.columns!='predicted_label') & (df.columns!='label')].as_matrix()
+		x = df.loc[node_id, (df.columns!='predicted_label') & (df.columns!='label') & (df.columns!='label_depth')].as_matrix()
 		Wx = x.dot(params['W'])
 		Wxb = Wx + params['b']
 		preds = np.argmax(Wxb, 1)
@@ -185,6 +186,8 @@ class Perceptron(Classifier):
 			return True, 'count_threshold'
 		# counts = np.asarray([len(df[df['label']==c]) for c in range(self.num_classes)]).astype(np.float32)
 		counts = Counter(df['label'])
+		class_prob = np.array(counts.values()).astype(np.float32)/len(df)
+		self.impurity = -np.sum(class_prob*np.log2(class_prob))
 		if np.float(counts.most_common(1)[0][1])/len(df) > purity_threshold:
 			if len(counts) <= 1:
 				# Only class in data "purity_threshold I"
@@ -256,5 +259,8 @@ class Perceptron(Classifier):
 			df.to_csv(os.path.join(data_path, 'data', 'data_'+str(child_id[j])+'.csv'),index=False)
 		logging.debug('Node impurity = {}'.format(self.score))
 
-	def get_impurity(self):
+	def get_self_impurity(self):
+		return self.impurity
+
+	def get_split_impurity(self):
 		return self.score

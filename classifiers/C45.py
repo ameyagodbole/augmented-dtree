@@ -27,6 +27,7 @@ class C45(Classifier):
 		self.num_classes = num_classes
 		self.index = None
 		self.value = None
+		self.impurity = None
 		self.score = None
 		self.impurity_drop = None
 		self.b_score = None
@@ -121,6 +122,8 @@ class C45(Classifier):
 			logging.debug('Decide label node based on count_threshold')
 			return True, 'count_threshold'
 		counts = Counter(df['label'])
+		class_prob = np.array(counts.values()).astype(np.float32)/len(df)
+		self.impurity = -np.sum(class_prob*np.log2(class_prob))
 		if np.float(counts.most_common(1)[0][1])/len(df) > purity_threshold:
 			if len(counts)<=1:
 				# Only class in data "purity_threshold I"
@@ -143,7 +146,10 @@ class C45(Classifier):
 		counts = np.asarray([len(df[df['label']==c]) for c in range(self.num_classes)])
 		return np.argmax(counts).astype(np.int32)
 
-	def get_impurity(self):
+	def get_self_impurity(self):
+		return self.impurity
+
+	def get_split_impurity(self):
 		return self.score
 
 	def predict(self, node_id, params, df, child_id):

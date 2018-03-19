@@ -119,11 +119,12 @@ class DTree(object):
 				continue
 
 			if self.impurity_drop_threshold is not None:
-				if self.get_impurity_drop(self.nodes[curr_node.parent_id], curr_node) < self.impurity_drop_threshold :
+				if self.get_impurity_drop(curr_node) < self.impurity_drop_threshold :
 					curr_node.child_id = []
 					curr_node.num_child = 0
 					curr_node.is_decision_node = True
 					curr_node.label = curr_node.get_label()
+					curr_node.label_type = 'impurity_threshold'
 					logging.debug('Stop growth at node {} due to low impurity drop rate'.format(node_to_process))
 					node_to_process += 1
 					continue
@@ -161,7 +162,8 @@ class DTree(object):
 			node_info['is_decision_node'] = i.is_decision_node
 			node_info['label'] = i.label
 			node_info['label_type'] = i.label_type
-			node_info['impurity'] = i.get_impurity()
+			node_info['impurity'] = i.get_self_impurity()
+			node_info['split_impurity'] = i.get_split_impurity()
 			structure[i.node_id] = node_info
 		logging.debug('Saving to {}'.format(model_save_file))
 		with open(model_save_file, 'wb') as savefile:
@@ -210,9 +212,10 @@ class DTree(object):
 		self.load_tree(model_save_file, model_save_path)
 		df = pd.read_csv(data_file, index_col='assigned_node')
 		df['predicted_label'] = [0 for _ in range(len(df))]
+		df['label_depth'] = [0 for _ in range(len(df))]
 		for node in self.nodes:
 			node.predict(df)
-		df = df[['label','predicted_label']]
+		df = df[['label','predicted_label','label_depth']]
 		df.to_csv(os.path.join(working_dir_path, output_file),index=False)
 		acc = pd.np.sum(df['label']==df['predicted_label']).astype(pd.np.float32)  / len(df)
 		logging.info("Accuracy: {}".format(acc))
@@ -223,13 +226,10 @@ class DTree(object):
 		f.write("Number of nodes: {}".format(len(self.nodes)))
 		f.close()
 
-	def get_impurity_drop(self, parent_node, child_node):
+	def get_impurity_drop(self, node):
 		"""
-		Find impurity drop from parent to child node.
+		Find impurity drop from current node to child nodes
 		Arguments:
-		parent_node: Parent node
-		child_node: Child node	
+		node : Node to process for impurity threshold criterion
 		"""
-		if child_node.node_id == 0:
-			return float('inf')
-		return (parent_node.get_impurity() - child_node.get_impurity())
+		return (node.get_self_impurity() - node.get_split_impurity())

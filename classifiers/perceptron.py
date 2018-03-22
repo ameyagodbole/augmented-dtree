@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 import logging
+from sklearn.cluster import KMeans
 from classifiers.classifier import Classifier
 from collections import Counter
 
@@ -47,9 +48,9 @@ class Perceptron(Classifier):
 				global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name='global_step')
 			with tf.variable_scope('perceptron') as scope:
 				self.W = tf.get_variable('weight', shape=[self.input_dim, self.output_dim], dtype=tf.float32,
-					initializer=tf.contrib.layers.xavier_initializer())
+					initializer=tf.zeros_initializer())
 				self.b = tf.get_variable('bias', shape=[1, self.output_dim], dtype=tf.float32,
-					initializer=tf.ones_initializer())
+					initializer=tf.zeros_initializer())
 				# q.shape = [None, output_dim]
 				self.q = tf.nn.softmax(tf.matmul(self.data, self.W, name='matmul') + self.b, name='softmax')
 			with tf.variable_scope('loss') as scope:
@@ -86,11 +87,20 @@ class Perceptron(Classifier):
 			raise AssertionError("Perceptron: train called before build")
 		params = {}
 		df = pd.read_csv(balanced_file)
-		lr = np.float32(self.batch_size)/len(df)
+		
+		def _create_assign_op(self, data):
+			kmeans_obj = KMeans(n_clusters=self.output_dim, n_init=5, n_jobs=-1)
+			kmeans = kmeans_obj.fit(data.as_matrix([col for col in data.columns if col!='label']))
+			assign_op = self.W.assign(kmeans.cluster_centers_.T)
+			return assign_op
+
+		assign_op = _create_assign_op(self, df)
+		lr = 0.01 #np.float32(self.batch_size)/len(df)
 		all_ok = False
 		while not all_ok:
 			with tf.Session(graph = self.graph) as sess:
 				sess.run(tf.global_variables_initializer())
+				sess.run(assign_op)
 				prev_epoch_loss = None
 				max_loss_drop = None
 				initial_loss_drop = None

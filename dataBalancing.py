@@ -5,6 +5,8 @@ import scipy.cluster
 import scipy.stats
 import pandas as pd
 import time
+
+from imblearn.under_sampling import ClusterCentroids
 '''
 def timing(f):
 	def wrap(*args):
@@ -19,7 +21,7 @@ def timing(f):
 class DataBalance(object):
 	"""DataBalance class for data balancing"""
 	
-	def __init__(self, input_file, num_classes):
+	def __init__(self, input_file, num_classes, mode):
 		"""
 		Arguments:
 		input_file: File containing data to be balanced
@@ -32,6 +34,7 @@ class DataBalance(object):
 		self.size_class = None
 		self.features = None
 		self.num_classes = num_classes
+		self.mode = mode
 
 	def cluster(self):
 		"""
@@ -51,6 +54,23 @@ class DataBalance(object):
 				df.loc[df['label']==i, 'cluster'] = 0
 			else:
 				pass
+
+	def undersample(self):
+		df = self.data
+
+		cc = ClusterCentroids()
+		data = df[self.features].as_matrix()
+		labels = df['label']
+		data_resampled, label_resampled = cc.fit_sample(data, labels)
+
+		df2 = pd.DataFrame(data_resampled.tolist(),columns=self.features)
+
+		df2['label'] = label_resampled
+		df2['cluster'] = 0
+		df2['original'] = 0
+
+		return df2
+
 
 	def oversample(self, label, cluster, size):
 		"""
@@ -152,8 +172,15 @@ class DataBalance(object):
 		self.load()
 		if self.data.empty or len(self.data)<=1:
 			return
-		self.cluster()
-		dfBalanced = self.balance()
+		dfBalanced = None
+		if self.mode == 'over_sample':
+			self.cluster()
+			dfBalanced = self.balance()
+		elif self.mode == 'under_sample':
+			dfBalanced = self.undersample()
+		else:
+			raise NotImplementedError
+
 		out_csv = dfBalanced[self.features+['label']]
 		out_csv.to_csv(out_file_name,index=False)
 

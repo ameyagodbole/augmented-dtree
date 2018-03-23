@@ -14,7 +14,7 @@ class DTree(object):
 	DTree class to store tree structure
 	"""
 	
-	def __init__(self, num_classes, num_child, max_depth, data_type, data_dimension, data_balance, decision_type,
+	def __init__(self, num_classes, num_child, max_depth, data_type, data_dimension, data_balance, balance_mode, decision_type,
 	 purity_threshold=1., count_threshold=0, impurity_drop_threshold=None, verbosity=2):
 		"""
 		Arguments:
@@ -38,6 +38,7 @@ class DTree(object):
 		self.data_dimension = data_dimension
 		self.data_balance = data_balance
 		self.decision_type = decision_type
+		self.balance_mode = balance_mode
 		self.nodes = []
 		self.built = False
 		self.count_threshold = count_threshold
@@ -83,7 +84,7 @@ class DTree(object):
 		node_to_process = 0
 		if self.data_balance:
 			logging.debug('Balance file data_0.csv')
-			db = DataBalance(os.path.join(base,'data_0.csv') , self.num_classes)
+			db = DataBalance(os.path.join(base,'data_0.csv') , self.num_classes, self.balance_mode)
 			db.data_balance(os.path.join(base,'b_data_0.csv'))
 
 		balance_filename = 'b_data_0.csv' if self.data_balance else 'data_0.csv'
@@ -108,7 +109,7 @@ class DTree(object):
 					logging.debug('File already balanced (b_data_{}.csv)'.format(curr_node.node_id))
 				else:
 					logging.debug('Balance file data_{}.csv'.format(curr_node.node_id))
-					db = DataBalance(os.path.join(base,'data_{}.csv'.format(curr_node.node_id)) , self.num_classes)
+					db = DataBalance(os.path.join(base,'data_{}.csv'.format(curr_node.node_id)) , self.num_classes, self.balance_mode)
 					db.data_balance(os.path.join(base,'b_data_{}.csv'.format(curr_node.node_id)))
 			child_list = curr_node.train()
 			curr_node.save_node_params(model_save_path)			

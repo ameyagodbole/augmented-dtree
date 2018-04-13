@@ -89,7 +89,7 @@ class Perceptron(Classifier):
 		df = pd.read_csv(balanced_file)
 		
 		def _create_assign_op(self, data):
-			kmeans_obj = KMeans(n_clusters=self.output_dim, n_init=5, n_jobs=-1)
+			kmeans_obj = KMeans(n_clusters=self.output_dim, n_init=1, n_jobs=-1)
 			kmeans = kmeans_obj.fit(data.as_matrix([col for col in data.columns if col!='label']))
 			assign_op = self.W.assign(kmeans.cluster_centers_.T)
 			return assign_op

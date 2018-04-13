@@ -177,7 +177,7 @@ class DataBalance(object):
 		'''
 		df = self.data
 
-		cc = ClusterCentroids(n_jobs=-1)
+		cc = ClusterCentroids(voting='soft', n_jobs=-1)
 		data = df[self.features].as_matrix()
 		labels = df['label']
 		data_resampled, label_resampled = cc.fit_sample(data, labels)
@@ -200,15 +200,22 @@ class DataBalance(object):
 		self.load()
 		if self.data.empty or len(self.data)<=1:
 			return
-		dfBalanced = None
-		if self.mode == 'hac_os_no_us':
-			dfBalanced = self.hac_oversample()
-		elif self.mode == 'kmeans_os_no_us':
-			dfBalanced = self.kmeans_oversample()
-		elif self.mode == 'no_os_kmeans_us':
-			dfBalanced = self.kmeans_undersample()
+		
+		def balance_required(df):
+			return len(np.unique(df['label']))>1
+
+		if balance_required(self.data):
+			dfBalanced = None
+			if self.mode == 'hac_os_no_us':
+				dfBalanced = self.hac_oversample()
+			elif self.mode == 'kmeans_os_no_us':
+				dfBalanced = self.kmeans_oversample()
+			elif self.mode == 'no_os_kmeans_us':
+				dfBalanced = self.kmeans_undersample()
+			else:
+				raise NotImplementedError
 		else:
-			raise NotImplementedError
+			dfBalanced = self.data
 
 		out_csv = dfBalanced[self.features+['label']]
 		out_csv.to_csv(out_file_name,index=False)

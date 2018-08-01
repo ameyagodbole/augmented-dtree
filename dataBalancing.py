@@ -2,9 +2,12 @@ import numpy as np
 import logging
 import pandas as pd
 import time
+import scipy.cluster
 from imblearn.under_sampling import ClusterCentroids
 from sklearn.cluster import KMeans
 import scipy.cluster.hierarchy as hcluster
+from imblearn.under_sampling import TomekLinks,EditedNearestNeighbours	
+
 # TODO: Switch to sklearn hierarchical
 
 
@@ -150,7 +153,6 @@ class DataBalance(object):
 
 		return df
 
-
 	def kmeans_oversample(self):
 		"""
 		Oversample by KMeans clustering
@@ -190,10 +192,109 @@ class DataBalance(object):
 
 		return df2
 
+	def undersample_cluster(self, class_num, cluster, size):
+		'''
+		Undersamples the required cluster to the required size
+		'''
+		df = self.data
+		dfTemp = df.loc[(df['label'] == class_num) & df['cluster'] == cluster]
+		if len(dfTemp>0): 
+			class_indices = dfTemp.index
+			# print(class_indices)
+			random_indices = np.random.choice(class_indices, size, replace=False)
+			data_resampled = dfTemp.loc[random_indices]
+			# print(data_resampled)
+			return data_resampled
+		else:
+			return dfTemp
+
+
+	def hac_os_us(self):
+		'''
+		Computes the avg number of samples across all clusters of all classes and brings all clusters to the size of
+		this average. It oversamples and undersamples when required.
+		'''
+		df = self.data
+		self.get_params()
+		avg_samples = 0;
+
+		for i in range(self.num_classes):
+			avg_samples = avg_samples +  df.loc[df['label'] == i].shape[0]
+
+		avg_samples= int(float(avg_samples) / self.num_classes)
+		# print(avg_samples)
+		df_to_add = pd.DataFrame(columns = df.columns)
+
+
+		for i in range(self.num_classes):
+			# print('class: {}'.format(i))
+			dfTemp = df.loc[(df['label'] == i)]
+			# print(len(dfTemp))
+			ratio = len(dfTemp)/len(df)
+			num_clusters = len(np.unique(dfTemp['cluster']))
+
+			for j in np.unique(dfTemp['cluster']):
+				lenj = dfTemp.loc[dfTemp['cluster'] == j].shape[0]
+				if lenj<= np.ceil(float(avg_samples)/num_clusters):			
+					df_to_add = df_to_add.append( self.cbo_oversample(i, j, int(np.ceil(float(avg_samples)/num_clusters))),ignore_index=False)
+				elif lenj > np.ceil(float(avg_samples)/num_clusters):
+					df_to_add = df_to_add.append(self.undersample_cluster(i,j, int(np.ceil(float(avg_samples)/num_clusters))), ignore_index = False)
+			
+		return df_to_add
+
+	def hac_undersample(self):
+		'''
+		Computes the average number od samples in all clusters. It undersamples anything with more samples than this avg
+		'''
+
+		df = self.data
+		self.get_params()
+		avg_samples = 0;
+
+		for i in range(self.num_classes):
+			avg_samples = avg_samples +  df.loc[df['label'] == i].shape[0]
+
+		avg_samples= int(float(avg_samples) / self.num_classes)
+		# print(avg_samples)
+		df_to_add = pd.DataFrame(columns = df.columns)
+
+
+		for i in range(self.num_classes):
+			# print('class: {}'.format(i))
+			dfTemp = df.loc[(df['label'] == i)]
+			# print(len(dfTemp))
+			ratio = len(dfTemp)/len(df)
+			num_clusters = len(np.unique(dfTemp['cluster']))
+
+			for j in np.unique(dfTemp['cluster']):
+				lenj = dfTemp.loc[dfTemp['cluster'] == j].shape[0]
+				if lenj > np.ceil(float(avg_samples)/num_clusters):
+					df_to_add = df_to_add.append(self.undersample_cluster(i,j, int(np.ceil(float(avg_samples)/num_clusters))), ignore_index = False)
+			
+		return df_to_add
+
+	def enn(self, data):
+		'''
+		Applies editted nearest neighbor to remove samples whose neighbors mostly belong to other classes
+		'''
+		df = data
+		X = df.as_matrix(self.features)
+		y = np.ravel(df.as_matrix(['label']))
+		
+		enn = EditedNearestNeighbours(ratio='all',kind_sel='mode',n_neighbors=5,random_state=42,n_jobs=4)
+		X_res, y_res = enn.fit_sample(X, y)
+
+		df_enn = pd.DataFrame(X_res, columns=self.features)
+		df_enn['label'] = y_res
+		return df_enn
+
+
 
 	def data_balance(self, out_file_name):
 		"""
 		Balances the data and saves it in a csv file.
+		There are 5 modes to balance data: Oversample with HAC or Kmeans, undersample with Kmeans or HAC, or use an optimal
+		combination of oversampling and undersampling.
 		Arguments:
 		name: 	name of csv file to save to
 		"""
@@ -208,12 +309,34 @@ class DataBalance(object):
 			dfBalanced = None
 			if self.mode == 'hac_os_no_us':
 				dfBalanced = self.hac_oversample()
+
+			elif self.mode == 'no_os_hac_us':
+				dfBalanced = self.hac_undersample()
+
+			elif self.mode == 'hac_os_enn_us':
+				dfBalanced = self.hac_oversample()
+				dfBalanced = self.enn(dfBalanced)
+
 			elif self.mode == 'kmeans_os_no_us':
 				dfBalanced = self.kmeans_oversample()
+
+			elif self.mode == 'kmeans_os_enn_us':
+				dfBalanced = self.kmeans_oversample()
+				dfBalanced = self.enn(dfBalanced)
+
 			elif self.mode == 'no_os_kmeans_us':
 				dfBalanced = self.kmeans_undersample()
+
+			elif self.mode == 'no_os_enn_us':
+				dfBalanced = self.enn(self.data)
+
+			elif self.mode == 'hac_os_hac_us':
+				dfBalanced = self.hac_os_us()
+			
 			else:
 				raise NotImplementedError
+
+
 		else:
 			dfBalanced = self.data
 
@@ -231,4 +354,3 @@ class DataBalance(object):
 		df['cluster'] = np.nan	
 		df['original'] = 1
 		self.data = df
-

@@ -7,6 +7,7 @@ from imblearn.under_sampling import ClusterCentroids
 from sklearn.cluster import KMeans
 import scipy.cluster.hierarchy as hcluster
 from imblearn.under_sampling import TomekLinks,EditedNearestNeighbours	
+
 # TODO: Switch to sklearn hierarchical
 
 
@@ -152,7 +153,6 @@ class DataBalance(object):
 
 		return df
 
-
 	def kmeans_oversample(self):
 		"""
 		Oversample by KMeans clustering
@@ -287,6 +287,7 @@ class DataBalance(object):
 		df_enn = pd.DataFrame(X_res, columns=self.features)
 		df_enn['label'] = y_res
 		return df_enn
+
 
 
 	def data_balance(self, out_file_name):

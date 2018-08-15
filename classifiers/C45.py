@@ -10,12 +10,13 @@ from collections import Counter
 class C45(Classifier):
 	"""Implement a C4.5 classifier"""
 
-	def __init__(self, input_dim, output_dim, num_classes, epochs, batch_size, node_id, data_balance):
+	def __init__(self, input_dim, output_dim, num_classes, decision_criterion, epochs, batch_size, node_id, data_balance):
 		"""
 		Arguments:
 		input_dim: Dimension of input data
 		output_dim: Dimension of output labels (equal to number of child nodes)
-		num_classes: Number of classes in data		
+		num_classes: Number of classes in data
+		decision_criterion: Decision function (CURRENTlY IMPLEMENTED: entropy, gini)
 		epochs: Ignored
 		batch_size: Ignored
 		node_id: ID of node housing the decision maker 
@@ -25,6 +26,7 @@ class C45(Classifier):
 		self.input_dim = input_dim
 		self.output_dim = 2
 		self.num_classes = num_classes
+		self.decision_criterion = decision_criterion
 		self.index = None
 		self.value = None
 		self.impurity = None

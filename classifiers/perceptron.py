@@ -10,12 +10,13 @@ from collections import Counter
 class Perceptron(Classifier):
 	"""Implement a single layer Perceptron"""
 
-	def __init__(self, input_dim, output_dim, num_classes, epochs, batch_size, node_id, data_balance):
+	def __init__(self, input_dim, output_dim, num_classes, decision_criterion, epochs, batch_size, node_id, data_balance):
 		"""
 		Arguments:
 		input_dim: Dimension of input data
 		output_dim: Dimension of output labels (equal to number of child nodes)
 		num_classes: Number of classes in data
+		decision_criterion: Decision function (CURRENTlY IMPLEMENTED: entropy, gini)
 		epochs: Number of training epochs
 		batch_size: Samples per batch (training as well as prediction)
 		node_id: ID of node housing the decision maker
@@ -25,6 +26,7 @@ class Perceptron(Classifier):
 		self.input_dim = input_dim
 		self.output_dim = output_dim
 		self.num_classes = num_classes
+		self.decision_criterion = decision_criterion
 		self.epochs = epochs
 		self.batch_size = batch_size
 		self.node_id = node_id

@@ -54,7 +54,12 @@ class C45(Classifier):
 			for class_val in classes:
 				p = np.float(list(group['label']).count(class_val)) / size
 				if p != 0.0:
-					score -= p * np.log2(p)
+					if self.decision_criterion=='entropy':
+						score -= p * np.log2(p)
+					elif self.decision_criterion=='gini':
+						score += p * (1-p)
+					else:
+						raise NotImplementedError('Feature not implemented: decision_criterion = {}'.format(self.decision_criterion))
 			# weight the group score by its relative size
 			impurity += score * (size / n_instances)
 		return impurity
@@ -125,7 +130,13 @@ class C45(Classifier):
 			return True, 'count_threshold'
 		counts = Counter(df['label'])
 		class_prob = np.array(counts.values()).astype(np.float32)/len(df)
-		self.impurity = -np.sum(class_prob*np.log2(class_prob))
+		if self.decision_criterion=='entropy':
+			self.impurity = -np.sum(class_prob*np.log2(class_prob))
+		elif self.decision_criterion=='gini':
+			self.impurity = np.sum(class_prob*(1-class_prob))
+		else:
+			raise NotImplementedError('Feature not implemented: decision_criterion = {}'.format(self.decision_criterion))
+		
 		if np.float(counts.most_common(1)[0][1])/len(df) > purity_threshold:
 			if len(counts)<=1:
 				# Only class in data "purity_threshold I"

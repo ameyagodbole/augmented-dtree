@@ -10,12 +10,13 @@ from collections import Counter
 class Perceptron(Classifier):
 	"""Implement a single layer Perceptron"""
 
-	def __init__(self, input_dim, output_dim, num_classes, epochs, batch_size, node_id, data_balance):
+	def __init__(self, input_dim, output_dim, num_classes, decision_criterion, epochs, batch_size, node_id, data_balance):
 		"""
 		Arguments:
 		input_dim: Dimension of input data
 		output_dim: Dimension of output labels (equal to number of child nodes)
 		num_classes: Number of classes in data
+		decision_criterion: Decision function (CURRENTlY IMPLEMENTED: entropy, gini)
 		epochs: Number of training epochs
 		batch_size: Samples per batch (training as well as prediction)
 		node_id: ID of node housing the decision maker
@@ -25,6 +26,7 @@ class Perceptron(Classifier):
 		self.input_dim = input_dim
 		self.output_dim = output_dim
 		self.num_classes = num_classes
+		self.decision_criterion = decision_criterion
 		self.epochs = epochs
 		self.batch_size = batch_size
 		self.node_id = node_id
@@ -63,10 +65,16 @@ class Perceptron(Classifier):
 				p = tf.divide(n, q_sum, name='p')
 				clip_val_min = tf.Variable(1e-30, dtype=tf.float32, trainable=False)
 				clip_val_max = tf.Variable(1, dtype=tf.float32, trainable=False)
-				p_clip = tf.clip_by_value(p, clip_value_min=clip_val_min, clip_value_max=clip_val_max)
 				# H.shape = [1, output_dim]
-				H = -1 * tf.reduce_sum(tf.multiply(p_clip, tf.log(p_clip, name='log_p')), axis=0, keep_dims=True, name='Hj')
-				self.loss = tf.reduce_sum(tf.multiply(H, q_sum/N), name='weighted_entropy')
+				if self.decision_criterion=='entropy':
+					p_clip = tf.clip_by_value(p, clip_value_min=clip_val_min, clip_value_max=clip_val_max)
+					H = -1 * tf.reduce_sum(tf.multiply(p_clip, tf.log(p_clip, name='log_p')), axis=0, keep_dims=True, name='Hj')
+					self.loss = tf.reduce_sum(tf.multiply(H, q_sum/N), name='weighted_entropy')
+				elif self.decision_criterion=='gini':
+					H = 1 - tf.reduce_sum(tf.square(p, name='p_square'), axis=0, keep_dims=True, name='Hj')
+					self.loss = tf.reduce_sum(tf.multiply(H, q_sum/N), name='weighted_gini')
+				else:
+					raise NotImplementedError('Feature not implemented: decision_criterion = {}'.format(self.decision_criterion))
 			with tf.variable_scope('opt') as scope:
 				# TODO: pass learning rate
 				self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss, global_step=global_step)
@@ -197,7 +205,13 @@ class Perceptron(Classifier):
 		# counts = np.asarray([len(df[df['label']==c]) for c in range(self.num_classes)]).astype(np.float32)
 		counts = Counter(df['label'])
 		class_prob = np.array(counts.values()).astype(np.float32)/len(df)
-		self.impurity = -np.sum(class_prob*np.log2(class_prob))
+		if self.decision_criterion=='entropy':
+			self.impurity = -np.sum(class_prob*np.log2(class_prob))
+		elif self.decision_criterion=='gini':
+			self.impurity = np.sum(class_prob*(1-class_prob))
+		else:
+			raise NotImplementedError('Feature not implemented: decision_criterion = {}'.format(self.decision_criterion))
+		
 		if np.float(counts.most_common(1)[0][1])/len(df) > purity_threshold:
 			if len(counts) <= 1:
 				# Only class in data "purity_threshold I"
@@ -264,7 +278,12 @@ class Perceptron(Classifier):
 			df_score = 0.0
 			for cl in np.unique(df['label']):
 				p = float(len(df.loc[df['label']==cl]))/len(df)
-				df_score -= p * np.log2(p)
+				if self.decision_criterion=='entropy':
+					df_score -= p * np.log2(p)
+				elif self.decision_criterion=='gini':
+					df_score += p * (1-p)
+				else:
+					raise NotImplementedError('Feature not implemented: decision_criterion = {}'.format(self.decision_criterion))
 			self.score += float(len(df))/len(file)*df_score
 			df.to_csv(os.path.join(data_path, 'data', 'data_'+str(child_id[j])+'.csv'),index=False)
 		logging.debug('Node impurity = {}'.format(self.score))

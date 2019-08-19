@@ -8,7 +8,7 @@ Decision trees are discriminative classifiers that hierarchically partition the 
 # Model Description and implementation details
 
 ## Augmented DTree
-Augmented dtree is a decision tree implementation where each node of the decision tree is itself a classifier of class DTNode. These nodes are processed in a queue and new nodes are added to the end of the queue to be processed. Each node can have 2 or more child nodes. To keep track of data going into each child node, a seperate file is created for the data going into each child node from the parent node. Also, when data balancing is called a seperate file is created for the data balanced data at each node.
+Augmented dtree is a decision tree implementation where each node of the decision tree is itself a classifier of class DTNode. These nodes are processed in a queue and new nodes are added to the end of the queue to be processed. Each node can have 2 or more child nodes. To keep track of data going into each child node, a separate file is created for the data going into each child node from the parent node. Also, when data balancing is called a separate file is created for the data balanced data at each node.
 
 ## DTNode
 DTNode comprises of the individual nodes that the tree is made of. Each node of the tree has a classifier which is passed as an argument. The node learns the classifier parameters using the data received by the node and calculates the entropy at the node.
@@ -24,15 +24,15 @@ Training the model:
 	Parameters:
 
 	num_classes: Number of classes in the dataset
-	num_clild: Number of child nodes required for each node
-	max_depth: Maximum depth of the neural tree allowed (to preven overfitting)
+	num_child: Number of child nodes required for each node
+	max_depth: Maximum depth of the neural tree allowed (to prevent overfitting)
 	data_type: Data type of the data 
 	data_dimension: Number of features in the data
 	data_balance: Whether data balancing is required (True/False)
 	balance_mode: Type of data balancing required
-	decision_type: The typw of classifier to be used in each node of the tree
-	decision_criterion: The criterion used to decide when a nore is a leaf node
-	purity_threshold: The maximum purity of a node above which is is declared a leaf node
+	decision_type: The type of classifier to be used in each node of the tree
+	decision_criterion: The criterion used to decide when a node is a leaf node
+	purity_threshold: The maximum purity of a node above which is declared a leaf node
 	count_threshold: The minimum count of data points at a node, below which we declare the node as a leaf node to prevent overfitting
 	impurity_drop_threshold: The minimum impurity drop from parent to child required, below which we declare the node as a leaf node
 

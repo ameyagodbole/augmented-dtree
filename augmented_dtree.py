@@ -14,21 +14,23 @@ class DTree(object):
 	DTree class to store tree structure
 	"""
 	
-	def __init__(self, num_classes, num_child, max_depth, data_type, data_dimension, data_balance, balance_mode, decision_type,
-	 purity_threshold=1., count_threshold=0, impurity_drop_threshold=None, verbosity=2):
+	def __init__(self, num_classes, num_child, max_depth, data_type, data_dimension, data_balance, balance_mode,
+	 decision_type, decision_criterion, purity_threshold=1., count_threshold=0, impurity_drop_threshold=None, verbosity=2):
 		"""
 		Arguments:
 		num_classes: Number of classes in data
-		num_child:	Numer of child nodes per decision node
-		max_depth:	Maximum depth of decision tree
-		data_type:	One of {'numeric','image'}
-		data_dimension:	Number of features in data; int for numeric , tuple of ints for image
+		num_child: Numer of child nodes per decision node
+		max_depth: Maximum depth of decision tree
+		data_type: One of {'numeric','image'}
+		data_dimension: Number of features in data; int for numeric , tuple of ints for image
 		data_balance: Bool (whether to use data_balancing)
+		balance_mode: String representing over- and under- sampling to be used
 		decision_type: Classifier to be used
-		purity_threshold:	Percentage of most common class for purity-based stoppping of tree growth
+		decision_criterion: The impurity criterion to be used (CURRENTLY IMPLEMENTED: entropy, gini)
+		purity_threshold: Percentage of most common class for purity-based stoppping of tree growth
 		count_threshold: Minimum number of samples needed, otherwise node is marked as leaf
 		impurity_drop_threshold: Minimum drop needed for growth of branch
-		verbosity:	0-ERROR 1-INFO 2-DEBUG
+		verbosity: 0-ERROR 1-INFO 2-DEBUG
 		"""
 		super(DTree, self).__init__()
 		self.num_classes = num_classes
@@ -37,8 +39,9 @@ class DTree(object):
 		self.data_type = data_type
 		self.data_dimension = data_dimension
 		self.data_balance = data_balance
-		self.decision_type = decision_type
 		self.balance_mode = balance_mode
+		self.decision_type = decision_type
+		self.decision_criterion = decision_criterion
 		self.nodes = []
 		self.built = False
 		self.count_threshold = count_threshold
@@ -59,7 +62,10 @@ class DTree(object):
 			logging.warning('num_child overide to 2 for C4.5')
 			self.num_child = 2
 		else:
-			raise NotImplementedError('Feature not implemented')
+			raise NotImplementedError('Feature not implemented: decision_type = {}'.format(decision_type))
+
+		if not (self.decision_criterion == 'entropy' or self.decision_criterion=='gini'):
+			raise NotImplementedError('Feature not implemented: decision_criterion = {}'.format(decision_criterion))
 
 	def train(self, data_file, working_dir_path, epochs_per_node, batch_size, model_save_path=None):
 		"""
@@ -102,7 +108,8 @@ class DTree(object):
 				break
 			logging.info('Process node {}'.format(node_to_process))
 			curr_node.set_decision_maker(self.decision_type(input_dim=self.data_dimension, output_dim=self.num_child,
-				 num_classes=self.num_classes, epochs=epochs_per_node, batch_size=batch_size, node_id = curr_node.node_id, data_balance = self.data_balance))
+				 num_classes=self.num_classes, decision_criterion=self.decision_criterion, epochs=epochs_per_node,
+				 batch_size=batch_size, node_id = curr_node.node_id, data_balance = self.data_balance))
 			curr_node.set_child_id_start(len(self.nodes))
 			if self.data_balance:
 				if os.path.isfile(os.path.join(base,'b_data_{}.csv'.format(curr_node.node_id))):
@@ -189,7 +196,8 @@ class DTree(object):
 				 num_classes=self.num_classes, num_child=structure[i]['num_child'])
 			curr_node = self.nodes[i]
 			curr_node.set_decision_maker(self.decision_type(input_dim=self.data_dimension, output_dim=self.num_child,
-				 num_classes=self.num_classes, epochs=None, batch_size=None, node_id = curr_node.node_id, data_balance = self.data_balance))
+				 num_classes=self.num_classes, decision_criterion=self.decision_criterion, epochs=None,
+				 batch_size=None, node_id = curr_node.node_id, data_balance = self.data_balance))
 			curr_node.child_id = structure[i]['child_id']
 			curr_node.is_decision_node = structure[i]['is_decision_node']
 			curr_node.label = structure[i]['label']

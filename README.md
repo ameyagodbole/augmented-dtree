@@ -1,5 +1,5 @@
 # augmented-dtree
-Library to place varied classifiers in decision tree nodes
+Implementation of **Progressively Balanced Multi-class Neural Trees**
 ### Link to paper
 https://ieeexplore.ieee.org/abstract/document/8599945
 

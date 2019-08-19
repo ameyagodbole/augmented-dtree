@@ -2,8 +2,10 @@
 Implementation of **Progressively Balanced Multi-class Neural Trees**
 ### Link to paper
 https://ieeexplore.ieee.org/abstract/document/8599945
+### Abstract
+Decision trees are discriminative classifiers that hierarchically partition the input space to achieve regions containing instances having uniform class label. Existing works in this area have mostly focused on C4.5 trees that learn axis aligned partitions. On the other hand, neural trees learn oblique partitions from data and use lesser number of decision nodes hosting perceptrons. However, these perceptrons are susceptible to data imbalances. This motivated us to propose a progressively balanced neural tree where training dataset are balanced prior to perceptron learning. The second contribution is the optimization of the decision function with respect to entropy impurity based objective functions. This formulation also allows a parent node to have more than two child nodes. The proposed algorithm is benchmarked on ten standard datasets against three baseline multi-class classification algorithms.
 
-# Model Discription and implementation details
+# Model Description and implementation details
 
 ## Augmented DTree
 Augmented dtree is a decision tree implementation where each node of the decision tree is itself a classifier of class DTNode. These nodes are processed in a queue and new nodes are added to the end of the queue to be processed. Each node can have 2 or more child nodes. To keep track of data going into each child node, a seperate file is created for the data going into each child node from the parent node. Also, when data balancing is called a seperate file is created for the data balanced data at each node.
